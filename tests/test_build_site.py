@@ -73,7 +73,7 @@ class BuildSiteTests(unittest.TestCase):
         (problem / "README.md").write_text("# 01 - Demo Problem\n", encoding="utf-8")
         (problem / "instances" / "demo001.dat").write_text("instance\n", encoding="utf-8")
         (problem / "models" / "demo001.lp").write_text("model\n", encoding="utf-8")
-        (problem / "solutions" / "demo001.sol").write_text("solution\n", encoding="utf-8")
+        (problem / "solutions" / "demo001.opt.sol").write_text("solution\n", encoding="utf-8")
 
         sparse_set = problem / "submissions" / "20260202_Notes_Only"
         sparse_set.mkdir(parents=True)
@@ -153,12 +153,18 @@ class BuildSiteTests(unittest.TestCase):
                 generated_at="2026-01-01T00:00:00Z",
             )
             self.assertTrue((out / "index.html").is_file())
+            self.assertTrue((out / "instances" / "index.html").is_file())
             self.assertTrue((out / "submissions" / "index.html").is_file())
+            self.assertTrue((out / "leaderboard" / "index.html").is_file())
             self.assertTrue((out / "problems" / "01-demo" / "index.html").is_file())
             data = json.loads((out / "assets" / "qoblib-data.json").read_text(encoding="utf-8"))
             self.assertEqual(data["generated_at"], "2026-01-01T00:00:00Z")
             self.assertEqual(data["counts"]["results"], 1)
+            self.assertEqual(data["counts"]["instances"], 1)
+            self.assertEqual(data["counts"]["leaderboard_entries"], 1)
             self.assertEqual(data["problems"][0]["title"], "Demo Problem")
+            self.assertEqual(data["instances"][0]["status"], "optimal")
+            self.assertEqual(data["leaderboard"][0]["rank"], 1)
 
     def test_source_links_use_repository_blob_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -173,6 +179,15 @@ class BuildSiteTests(unittest.TestCase):
             self.assertEqual(
                 result["summary_url"],
                 "https://github.com/example/QOBLIB/blob/main/01-demo/submissions/20260101_Method_Author/demo001/demo001_summary.csv",
+            )
+            instance = dataset["instances"][0]
+            self.assertEqual(
+                instance["source_url"],
+                "https://github.com/example/QOBLIB/blob/main/01-demo/instances/demo001.dat",
+            )
+            self.assertEqual(
+                instance["solution_url"],
+                "https://github.com/example/QOBLIB/blob/main/01-demo/solutions/demo001.opt.sol",
             )
 
 

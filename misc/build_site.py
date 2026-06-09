@@ -22,7 +22,7 @@ import html
 import json
 import re
 import shutil
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -51,6 +51,84 @@ PAPER_IMAGE_PATHS = [
     Path("paper/images/mip_density_optsolvedIn_plot_aug25.png"),
     Path("paper/images/qubo_density_optsolvedIn_plot_aug25.png"),
 ]
+PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
+    "01-marketsplit": {
+        "short": "Market Split",
+        "type": "Subset sum",
+        "formulation": "MIP / QUBO",
+        "minimize": True,
+        "tags": ["feasibility", "partitioning", "integer data"],
+    },
+    "02-labs": {
+        "short": "LABS",
+        "type": "Binary sequences",
+        "formulation": "QUBO / Ising",
+        "minimize": True,
+        "tags": ["autocorrelation", "spin variables", "signal design"],
+    },
+    "03-birkhoff": {
+        "short": "Birkhoff",
+        "type": "Matrix decomposition",
+        "formulation": "MIP",
+        "minimize": True,
+        "tags": ["assignment", "decomposition", "sparsity"],
+    },
+    "04-steiner": {
+        "short": "Steiner Packing",
+        "type": "Network design",
+        "formulation": "MIP",
+        "minimize": True,
+        "tags": ["VLSI", "routing", "packing"],
+    },
+    "05-sports": {
+        "short": "Sports Scheduling",
+        "type": "Scheduling",
+        "formulation": "CSP / MIP",
+        "minimize": True,
+        "tags": ["timetabling", "feasibility", "RobinX"],
+    },
+    "06-portfolio": {
+        "short": "Portfolio",
+        "type": "Finance",
+        "formulation": "QUBO / BQP",
+        "minimize": True,
+        "tags": ["risk", "transaction costs", "time series"],
+    },
+    "07-independentset": {
+        "short": "MIS",
+        "type": "Graph optimization",
+        "formulation": "QUBO / MIP",
+        "minimize": False,
+        "tags": ["graphs", "stable set", "maximum cardinality"],
+    },
+    "08-network": {
+        "short": "Network Design",
+        "type": "Telecommunications",
+        "formulation": "MIP",
+        "minimize": True,
+        "tags": ["flows", "degree constraints", "routing"],
+    },
+    "09-routing": {
+        "short": "Vehicle Routing",
+        "type": "Logistics",
+        "formulation": "MIP",
+        "minimize": True,
+        "tags": ["VRP", "time windows", "capacity"],
+    },
+    "10-topology": {
+        "short": "Topology",
+        "type": "Graph design",
+        "formulation": "Graph search / MIP",
+        "minimize": True,
+        "tags": ["diameter", "degree bound", "graph golf"],
+    },
+}
+DIRECTORY_INSTANCE_PROBLEMS = {"04-steiner", "06-portfolio"}
+RECURSIVE_FILE_INSTANCE_PROBLEMS = {"05-sports"}
+IGNORED_INSTANCE_FILES = {"README.md", "bounds.csv", "demand.txt"}
+IGNORED_INSTANCE_DIRS = {"instance_gen_set"}
+COMPRESSION_SUFFIXES = (".tar.gz", ".json.gz", ".xml.gz", ".txt.gz", ".gph.xz", ".dat.xz", ".gz", ".xz", ".zip")
+INSTANCE_SUFFIXES = (".dat", ".json", ".gph", ".vrp", ".xml", ".txt", ".csv")
 
 
 def read_template_columns(root: Path) -> list[str]:
@@ -124,6 +202,77 @@ def tree_url(repo_url: str, ref: str, rel_path: str | Path) -> str:
     return source_path_url(repo_url, ref, rel_path, "tree")
 
 
+def strip_known_suffixes(name: str, suffixes: tuple[str, ...]) -> str:
+    changed = True
+    while changed:
+        changed = False
+        for suffix in suffixes:
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+                changed = True
+                break
+    return name
+
+
+def instance_name_from_file(path: Path) -> str:
+    return strip_known_suffixes(strip_known_suffixes(path.name, COMPRESSION_SUFFIXES), INSTANCE_SUFFIXES)
+
+
+def instance_format(path: Path) -> str:
+    if path.is_dir():
+        return "directory"
+    name = path.name
+    for suffix in COMPRESSION_SUFFIXES:
+        if name.endswith(suffix):
+            base = name[: -len(suffix)]
+            inner = Path(base).suffix
+            return f"{inner}{suffix}" if inner else suffix
+    return path.suffix or "file"
+
+
+def solution_instance_name(path: Path, problem_dir: str) -> str:
+    name = strip_known_suffixes(path.name, COMPRESSION_SUFFIXES)
+    if problem_dir == "06-portfolio":
+        name = re.sub(r"_b\d+$", "", strip_known_suffixes(name, INSTANCE_SUFFIXES))
+        return f"po_{name}" if name.startswith("a") else name
+    for marker in (".opt.", ".bst."):
+        if marker in name:
+            return name.split(marker, 1)[0]
+    name = re.sub(r"\.(opt|bst)$", "", name)
+    return strip_known_suffixes(name, INSTANCE_SUFFIXES + (".sol",))
+
+
+def parse_numeric(value: str) -> float | None:
+    value = value.strip().replace(",", "")
+    if not value or value.upper() in {"N/A", "NA", "INF", "-INF"}:
+        return None
+    if not re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", value):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def objective_is_proven(result: dict[str, Any]) -> bool:
+    fields = result["fields"]
+    objective = parse_numeric(fields.get("Best Objective Value", ""))
+    bound = parse_numeric(fields.get("Optimality Bound", ""))
+    if objective is None or bound is None:
+        return False
+    tolerance = 1e-9 * max(1.0, abs(objective), abs(bound))
+    return abs(objective - bound) <= tolerance
+
+
+def status_label(status: str) -> str:
+    return {
+        "optimal": "Optimal",
+        "best_known": "Best known",
+        "submitted": "Submitted",
+        "open": "Open",
+    }.get(status, status.replace("_", " ").title())
+
+
 def parse_submission_prefix_date(name: str) -> dt.datetime | None:
     match = SUBMISSION_DATE_RE.match(name)
     if not match:
@@ -193,6 +342,7 @@ def problem_info(root: Path) -> dict[str, dict[str, str]]:
     info: dict[str, dict[str, str]] = {}
     for problem_dir in problem_dirs(root):
         table = table_info.get(problem_dir.name, {})
+        details = PROBLEM_DETAILS.get(problem_dir.name, {})
         number = table.get("number") or problem_dir.name.split("-", 1)[0]
         title = table.get("title") or read_problem_heading(problem_dir)
         description = table.get("description") or ""
@@ -200,6 +350,11 @@ def problem_info(root: Path) -> dict[str, dict[str, str]]:
             "number": number,
             "title": title,
             "description": description,
+            "short": details.get("short", title),
+            "type": details.get("type", ""),
+            "formulation": details.get("formulation", ""),
+            "minimize": details.get("minimize", True),
+            "tags": details.get("tags", []),
         }
     return info
 
@@ -293,6 +448,9 @@ def collect_submission_sets(
             if not date_key:
                 parsed = parse_submission_prefix_date(set_dir.name)
                 date_key = parsed.strftime("%Y-%m-%dT%H:%M:%S") if parsed else ""
+            submitters = sorted({item["fields"].get("Submitter", "") for item in group if item["fields"].get("Submitter", "")})
+            modeling = sorted({item["fields"].get("Modeling Approach", "") for item in group if item["fields"].get("Modeling Approach", "")})
+            algorithms = sorted({item["fields"].get("Algorithm Type", "") for item in group if item["fields"].get("Algorithm Type", "")})
             sets.append(
                 {
                     "problem_dir": problem_dir.name,
@@ -304,7 +462,11 @@ def collect_submission_sets(
                     "readme_url": source_path_url(repo_url, ref, rel_readme) if rel_readme else "",
                     "date_key": date_key,
                     "instance_count": count_top_level_entries(set_dir),
+                    "submitted_instance_count": len({item["instance"] for item in group}),
                     "result_count": len(group),
+                    "submitters": submitters,
+                    "modeling_approaches": modeling,
+                    "algorithm_types": algorithms,
                 }
             )
 
@@ -346,6 +508,11 @@ def collect_problems(
                 "number": meta["number"],
                 "title": meta["title"],
                 "description": meta["description"],
+                "short": meta["short"],
+                "type": meta["type"],
+                "formulation": meta["formulation"],
+                "minimize": meta["minimize"],
+                "tags": meta["tags"],
                 "path": rel_problem,
                 "page": f"problems/{problem_dir.name}/",
                 "source_url": tree_url(repo_url, ref, rel_problem),
@@ -362,6 +529,293 @@ def collect_problems(
     return collected
 
 
+def collect_solution_statuses(root: Path, problem_dir: str, repo_url: str, ref: str) -> dict[str, dict[str, str]]:
+    solutions_dir = root / problem_dir / "solutions"
+    statuses: dict[str, dict[str, str]] = {}
+    if not solutions_dir.is_dir():
+        return statuses
+
+    priority = {"solution": 0, "best_known": 1, "optimal": 2}
+    for source in sorted(path for path in solutions_dir.rglob("*") if path.is_file()):
+        if source.name.startswith(".") or source.name in {"README.md", "0-info.txt"}:
+            continue
+        name = solution_instance_name(source, problem_dir)
+        if not name:
+            continue
+        status = ""
+        if ".opt." in source.name or source.name.endswith(".opt.sol"):
+            status = "optimal"
+        elif ".bst." in source.name or source.name.endswith(".bst.sol"):
+            status = "best_known"
+        else:
+            status = "solution"
+        rel_source = source.relative_to(root).as_posix()
+        current = statuses.get(name)
+        if current and priority[current["status"]] > priority[status]:
+            continue
+        statuses[name] = {
+            "status": status,
+            "solution_path": rel_source,
+            "solution_url": source_path_url(repo_url, ref, rel_source),
+        }
+    return statuses
+
+
+def add_instance_source(
+    instances: dict[tuple[str, str], dict[str, Any]],
+    root: Path,
+    problem: dict[str, Any],
+    source: Path,
+    repo_url: str,
+    ref: str,
+) -> None:
+    name = source.name if source.is_dir() else instance_name_from_file(source)
+    if not name:
+        return
+    rel_source = source.relative_to(root).as_posix()
+    key = (problem["name"], name)
+    entry = instances.setdefault(
+        key,
+        {
+            "id": f"{problem['name']}:{name}",
+            "problem_dir": problem["name"],
+            "problem_number": problem["number"],
+            "problem_title": problem["title"],
+            "instance": name,
+            "family": "",
+            "format": instance_format(source),
+            "source_path": rel_source,
+            "source_url": tree_url(repo_url, ref, rel_source) if source.is_dir() else source_path_url(repo_url, ref, rel_source),
+        },
+    )
+    if not entry.get("source_path"):
+        entry.update(
+            {
+                "family": "",
+                "format": instance_format(source),
+                "source_path": rel_source,
+                "source_url": tree_url(repo_url, ref, rel_source) if source.is_dir() else source_path_url(repo_url, ref, rel_source),
+            }
+        )
+
+
+def collect_instance_sources(
+    root: Path,
+    problems: list[dict[str, Any]],
+    repo_url: str,
+    ref: str,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    instances: dict[tuple[str, str], dict[str, Any]] = {}
+    for problem in problems:
+        problem_name = problem["name"]
+        instances_dir = root / problem_name / "instances"
+        if not instances_dir.is_dir():
+            continue
+
+        if problem_name in RECURSIVE_FILE_INSTANCE_PROBLEMS:
+            sources = sorted(path for path in instances_dir.rglob("*") if path.is_file())
+        else:
+            sources = sorted(path for path in instances_dir.iterdir() if not path.name.startswith("."))
+
+        for source in sources:
+            if source.name in IGNORED_INSTANCE_FILES:
+                continue
+            if source.is_dir() and source.name in IGNORED_INSTANCE_DIRS:
+                continue
+            if source.is_dir() and problem_name not in DIRECTORY_INSTANCE_PROBLEMS:
+                continue
+            if source.is_file() and problem_name in DIRECTORY_INSTANCE_PROBLEMS:
+                continue
+            add_instance_source(instances, root, problem, source, repo_url, ref)
+            if problem_name in RECURSIVE_FILE_INSTANCE_PROBLEMS and source.is_file():
+                key = (problem_name, instance_name_from_file(source))
+                if key in instances:
+                    rel_parent = source.parent.relative_to(instances_dir).as_posix()
+                    instances[key]["family"] = "" if rel_parent == "." else rel_parent
+
+    return instances
+
+
+def best_results_by_instance(
+    results: list[dict[str, Any]],
+    problem_lookup: dict[str, dict[str, Any]],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], Counter[tuple[str, str]]]:
+    best: dict[tuple[str, str], dict[str, Any]] = {}
+    counts: Counter[tuple[str, str]] = Counter()
+    for result in results:
+        key = (result["problem_dir"], result["instance"])
+        counts[key] += 1
+        value = parse_numeric(result["fields"].get("Best Objective Value", ""))
+        if value is None:
+            continue
+        current = best.get(key)
+        minimize = problem_lookup.get(result["problem_dir"], {}).get("minimize", True)
+        if current is None:
+            best[key] = result
+            continue
+        current_value = parse_numeric(current["fields"].get("Best Objective Value", ""))
+        if current_value is None:
+            best[key] = result
+            continue
+        if (minimize and value < current_value) or (not minimize and value > current_value):
+            best[key] = result
+    return best, counts
+
+
+def collect_instances(
+    root: Path,
+    problems: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    repo_url: str,
+    ref: str,
+) -> list[dict[str, Any]]:
+    problem_lookup = {problem["name"]: problem for problem in problems}
+    instances = collect_instance_sources(root, problems, repo_url, ref)
+    best_results, result_counts = best_results_by_instance(results, problem_lookup)
+    solution_indexes = {
+        problem["name"]: collect_solution_statuses(root, problem["name"], repo_url, ref)
+        for problem in problems
+    }
+
+    for problem_name, solution_index in solution_indexes.items():
+        problem = problem_lookup[problem_name]
+        for instance, solution in solution_index.items():
+            key = (problem_name, instance)
+            instances.setdefault(
+                key,
+                {
+                    "id": f"{problem_name}:{instance}",
+                    "problem_dir": problem_name,
+                    "problem_number": problem["number"],
+                    "problem_title": problem["title"],
+                    "instance": instance,
+                    "family": "",
+                    "format": "",
+                    "source_path": "",
+                    "source_url": "",
+                },
+            )
+
+    for result in results:
+        key = (result["problem_dir"], result["instance"])
+        if key not in instances and result["problem_dir"] in problem_lookup:
+            problem = problem_lookup[result["problem_dir"]]
+            instances[key] = {
+                "id": f"{result['problem_dir']}:{result['instance']}",
+                "problem_dir": result["problem_dir"],
+                "problem_number": problem["number"],
+                "problem_title": problem["title"],
+                "instance": result["instance"],
+                "family": "",
+                "format": "",
+                "source_path": "",
+                "source_url": "",
+            }
+
+    collected: list[dict[str, Any]] = []
+    for key, entry in instances.items():
+        problem_name, instance = key
+        best_result = best_results.get(key)
+        best_value = ""
+        best_numeric: float | None = None
+        best_summary_url = ""
+        best_submission = ""
+        best_submitter = ""
+        best_date = ""
+        if best_result:
+            best_value = best_result["fields"].get("Best Objective Value", "")
+            best_numeric = parse_numeric(best_value)
+            best_summary_url = best_result["summary_url"]
+            best_submission = best_result["submission_set"]
+            best_submitter = best_result["fields"].get("Submitter", "")
+            best_date = best_result["fields"].get("Date", "")
+
+        solution = solution_indexes.get(problem_name, {}).get(instance, {})
+        solution_status = solution.get("status", "")
+        if solution_status == "optimal" or (best_result and objective_is_proven(best_result)):
+            status = "optimal"
+        elif solution_status == "best_known" or best_result:
+            status = "best_known"
+        elif result_counts[key]:
+            status = "submitted"
+        else:
+            status = "open"
+
+        collected.append(
+            {
+                **entry,
+                "status": status,
+                "status_label": status_label(status),
+                "solution_status": solution_status,
+                "solution_path": solution.get("solution_path", ""),
+                "solution_url": solution.get("solution_url", ""),
+                "best_value": best_value,
+                "best_numeric": best_numeric,
+                "best_summary_url": best_summary_url,
+                "best_submission": best_submission,
+                "best_submitter": best_submitter,
+                "best_date": best_date,
+                "submission_count": result_counts[key],
+            }
+        )
+
+    collected.sort(key=lambda item: (item["problem_dir"], item["instance"]))
+    return collected
+
+
+def collect_leaderboard(
+    results: list[dict[str, Any]],
+    problems: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    problem_lookup = {problem["name"]: problem for problem in problems}
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for result in results:
+        value = parse_numeric(result["fields"].get("Best Objective Value", ""))
+        if value is None:
+            continue
+        grouped[(result["problem_dir"], result["instance"])].append({**result, "numeric_value": value})
+
+    entries: list[dict[str, Any]] = []
+    for (problem_name, instance), rows in sorted(grouped.items()):
+        problem = problem_lookup.get(problem_name, {})
+        minimize = problem.get("minimize", True)
+        rows.sort(
+            key=lambda item: (
+                item["numeric_value"] if minimize else -item["numeric_value"],
+                item["date_key"],
+                item["submission_set"],
+            )
+        )
+        last_value: float | None = None
+        rank = 0
+        for index, row in enumerate(rows, start=1):
+            if last_value is None or row["numeric_value"] != last_value:
+                rank = index
+                last_value = row["numeric_value"]
+            fields = row["fields"]
+            entries.append(
+                {
+                    "rank": rank,
+                    "problem_dir": problem_name,
+                    "problem_title": row["problem_title"],
+                    "instance": instance,
+                    "objective": fields.get("Best Objective Value", ""),
+                    "numeric_objective": row["numeric_value"],
+                    "direction": "minimize" if minimize else "maximize",
+                    "submitter": fields.get("Submitter", ""),
+                    "date": fields.get("Date", ""),
+                    "date_key": row["date_key"],
+                    "modeling": fields.get("Modeling Approach", ""),
+                    "algorithm": fields.get("Algorithm Type", ""),
+                    "runtime": fields.get("Total Runtime", ""),
+                    "submission_set": row["submission_set"],
+                    "summary_url": row["summary_url"],
+                    "reference": fields.get("Reference", ""),
+                }
+            )
+    return entries
+
+
 def build_dataset(
     root: Path,
     repo_url: str = DEFAULT_REPO_URL,
@@ -373,12 +827,18 @@ def build_dataset(
     results, warnings = load_submission_results(root, columns, problems, repo_url, ref)
     submission_sets = collect_submission_sets(root, problems, results, repo_url, ref)
     problem_entries = collect_problems(root, problems, results, submission_sets, repo_url, ref)
+    instances = collect_instances(root, problem_entries, results, repo_url, ref)
+    leaderboard = collect_leaderboard(results, problem_entries)
+    instance_counts = Counter(instance["problem_dir"] for instance in instances)
+    for problem in problem_entries:
+        problem["counts"]["instances"] = instance_counts[problem["name"]]
     generated = generated_at or dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     counts = {
         "problems": len(problem_entries),
         "submission_sets": len(submission_sets),
         "results": len(results),
-        "instances": sum(problem["counts"]["instances"] for problem in problem_entries),
+        "instances": len(instances),
+        "leaderboard_entries": len(leaderboard),
     }
     return {
         "generated_at": generated,
@@ -387,7 +847,9 @@ def build_dataset(
         "template_columns": columns,
         "counts": counts,
         "problems": problem_entries,
+        "instances": instances,
         "submission_sets": submission_sets,
+        "leaderboard": leaderboard,
         "results": results,
         "warnings": warnings,
     }
@@ -420,7 +882,9 @@ def page_layout(title: str, body: str, depth: int, dataset: dict[str, Any]) -> s
       <a class="brand" href="{prefix}index.html">QOBLIB</a>
       <div class="nav-links">
         <a href="{prefix}index.html">Overview</a>
+        <a href="{prefix}instances/">Instances</a>
         <a href="{prefix}submissions/">Submissions</a>
+        <a href="{prefix}leaderboard/">Leaderboard</a>
         <a href="{repo_url}">GitHub</a>
       </div>
     </nav>
@@ -448,14 +912,24 @@ def format_count(value: int) -> str:
     return f"{value:,}"
 
 
+def sort_number(value: str) -> str:
+    parsed = parse_numeric(value)
+    return "" if parsed is None else str(parsed)
+
+
+def problem_meta_text(problem: dict[str, Any]) -> str:
+    parts = [problem.get("type", ""), problem.get("formulation", ""), "min" if problem.get("minimize", True) else "max"]
+    return " / ".join(part for part in parts if part)
+
+
 def render_home(dataset: dict[str, Any]) -> str:
     counts = dataset["counts"]
     stats = "\n".join(
         [
             stat_card("Problem classes", format_count(counts["problems"])),
-            stat_card("Instance groups", format_count(counts["instances"])),
+            stat_card("Instances", format_count(counts["instances"])),
             stat_card("Submission sets", format_count(counts["submission_sets"])),
-            stat_card("Result rows", format_count(counts["results"])),
+            stat_card("Ranked results", format_count(counts["leaderboard_entries"])),
         ]
     )
 
@@ -466,6 +940,7 @@ def render_home(dataset: dict[str, Any]) -> str:
             f"""<article class="problem-card">
   <div class="problem-number">{escape(problem["number"])}</div>
   <h3><a href="{escape(problem["page"])}">{escape(problem["title"])}</a></h3>
+  <p class="problem-meta">{escape(problem_meta_text(problem))}</p>
   <p>{escape(problem["description"])}</p>
   <dl class="compact-stats">
     <div><dt>Instances</dt><dd>{format_count(problem_counts["instances"])}</dd></div>
@@ -503,7 +978,9 @@ def render_home(dataset: dict[str, Any]) -> str:
         <h1>Benchmark instances and solution submissions for quantum optimization.</h1>
         <p>QOBLIB collects ten challenging optimization problem classes with practical motivation, reference models, known solutions, and community-submitted results.</p>
         <div class="hero-actions">
-          <a class="button primary" href="submissions/">Browse submissions</a>
+          <a class="button primary" href="instances/">Browse instances</a>
+          <a class="button" href="submissions/">Browse submissions</a>
+          <a class="button" href="leaderboard/">View leaderboard</a>
           <a class="button" href="{escape(dataset["repo_url"])}">View repository</a>
         </div>
       </div>
@@ -527,7 +1004,7 @@ def filter_option(value: str) -> str:
     return f'<option value="{escape(value)}">{escape(value)}</option>'
 
 
-def submissions_table(results: list[dict[str, Any]], depth: int) -> str:
+def submissions_table(results: list[dict[str, Any]], depth: int, filter_name: str = "results") -> str:
     prefix = root_prefix(depth)
     rows = []
     for result in results:
@@ -549,17 +1026,17 @@ def submissions_table(results: list[dict[str, Any]], depth: int) -> str:
   <td>{escape(result["instance"])}</td>
   <td>{escape(result["submission_set"])}</td>
   <td>{escape(fields.get("Submitter", ""))}</td>
-  <td>{escape(fields.get("Date", ""))}</td>
-  <td>{escape(fields.get("Best Objective Value", ""))}</td>
+  <td data-sort="{escape(result["date_key"])}">{escape(fields.get("Date", ""))}</td>
+  <td data-sort="{escape(sort_number(fields.get("Best Objective Value", "")))}">{escape(fields.get("Best Objective Value", ""))}</td>
   <td>{escape(fields.get("Modeling Approach", ""))}</td>
   <td>{escape(fields.get("Algorithm Type", ""))}</td>
-  <td>{escape(fields.get("Total Runtime", ""))}</td>
+  <td data-sort="{escape(sort_number(fields.get("Total Runtime", "")))}">{escape(fields.get("Total Runtime", ""))}</td>
   <td><a href="{escape(result["summary_url"])}">CSV</a></td>
 </tr>"""
         )
 
     return f"""<div class="table-wrap">
-  <table class="data-table" data-filter-table>
+  <table class="data-table" data-filter-table="{escape(filter_name)}" data-sort-table>
     <thead>
       <tr>
         <th>Problem</th>
@@ -583,15 +1060,53 @@ def submissions_table(results: list[dict[str, Any]], depth: int) -> str:
 
 def render_submissions(dataset: dict[str, Any]) -> str:
     results = dataset["results"]
+    submission_sets = dataset["submission_sets"]
     modeling_options = sorted({result["fields"].get("Modeling Approach", "") for result in results if result["fields"].get("Modeling Approach", "")})
     algorithm_options = sorted({result["fields"].get("Algorithm Type", "") for result in results if result["fields"].get("Algorithm Type", "")})
     problem_options = [(problem["name"], problem["title"]) for problem in dataset["problems"]]
+    submitters = sorted({result["fields"].get("Submitter", "") for result in results if result["fields"].get("Submitter", "")})
+    represented = len({result["problem_dir"] for result in results})
+    stats = "\n".join(
+        [
+            stat_card("Submission packages", format_count(len(submission_sets))),
+            stat_card("Submitted instances", format_count(len({(result["problem_dir"], result["instance"]) for result in results}))),
+            stat_card("Problems represented", format_count(represented)),
+            stat_card("Submitters", format_count(len(submitters))),
+        ]
+    )
     body = f"""    <section class="page-title">
       <p class="eyebrow">Community results</p>
       <h1>Instance submissions</h1>
-      <p>{format_count(len(results))} parsed result rows from canonical QOBLIB summary CSV files.</p>
+      <p>{format_count(len(results))} parsed result rows from canonical QOBLIB summary CSV files, grouped by submission package.</p>
     </section>
-    <section class="filters" aria-label="Submission filters">
+    <section class="stats-grid section-stats">{stats}</section>
+    <section class="section">
+      <div class="section-heading">
+        <h2>Submission packages</h2>
+        <p>Top-level submission directories as received through repository contributions.</p>
+      </div>
+      <section class="filters" data-filter-scope="packages" aria-label="Submission package filters">
+        <label>
+          Search
+          <input type="search" data-search placeholder="Package, submitter, method">
+        </label>
+        <label>
+          Problem
+          <select data-problem-filter>
+            <option value="">All problems</option>
+            {"".join(f'<option value="{escape(name)}">{escape(title)}</option>' for name, title in problem_options)}
+          </select>
+        </label>
+        <output data-result-count data-result-label="packages">{format_count(len(submission_sets))} packages</output>
+      </section>
+      {submission_sets_table(submission_sets, 1, "packages")}
+    </section>
+    <section class="section">
+      <div class="section-heading">
+        <h2>Result rows</h2>
+        <p>Instance-level rows parsed from each submitted summary CSV.</p>
+      </div>
+      <section class="filters" data-filter-scope="results" aria-label="Submission result filters">
       <label>
         Search
         <input type="search" data-search placeholder="Instance, submitter, method, reference">
@@ -617,31 +1132,234 @@ def render_submissions(dataset: dict[str, Any]) -> str:
           {"".join(filter_option(value) for value in algorithm_options)}
         </select>
       </label>
-      <output data-result-count>{format_count(len(results))} rows</output>
+        <output data-result-count data-result-label="rows">{format_count(len(results))} rows</output>
+      </section>
+      {submissions_table(results, 1, "results")}
     </section>
-    {submissions_table(results, 1)}
 """
     return page_layout("Submissions", body, 1, dataset)
 
 
-def render_submission_sets(sets: list[dict[str, Any]]) -> str:
+def submission_sets_table(sets: list[dict[str, Any]], depth: int, filter_name: str = "packages") -> str:
+    prefix = root_prefix(depth)
     rows = []
     for submission_set in sets:
+        submitters = ", ".join(submission_set.get("submitters", []))
+        approaches = ", ".join(submission_set.get("modeling_approaches", []))
+        search_text = " ".join(
+            [
+                submission_set["name"],
+                submission_set["problem_title"],
+                submitters,
+                approaches,
+                ", ".join(submission_set.get("algorithm_types", [])),
+            ]
+        ).lower()
         rows.append(
-            f"""<tr>
+            f"""<tr data-problem="{escape(submission_set["problem_dir"])}" data-search="{escape(search_text)}">
+  <td><a href="{prefix}problems/{escape(submission_set["problem_dir"])}/">{escape(submission_set["problem_title"])}</a></td>
   <td>{escape(submission_set["name"])}</td>
-  <td>{format_count(submission_set["instance_count"])}</td>
-  <td>{format_count(submission_set["result_count"])}</td>
-  <td>{escape(submission_set["date_key"][:10])}</td>
+  <td>{escape(submitters)}</td>
+  <td data-sort="{escape(submission_set["date_key"])}">{escape(submission_set["date_key"][:10])}</td>
+  <td data-sort="{escape(submission_set["submitted_instance_count"])}">{format_count(submission_set["submitted_instance_count"])}</td>
+  <td data-sort="{escape(submission_set["result_count"])}">{format_count(submission_set["result_count"])}</td>
   <td><a href="{escape(submission_set["source_url"])}">Directory</a></td>
 </tr>"""
         )
     return f"""<div class="table-wrap">
-  <table class="data-table compact-table">
-    <thead><tr><th>Submission set</th><th>Instance dirs</th><th>Result rows</th><th>Date key</th><th>Source</th></tr></thead>
+  <table class="data-table compact-table" data-filter-table="{escape(filter_name)}" data-sort-table>
+    <thead><tr><th>Problem</th><th>Submission set</th><th>Submitter</th><th>Date key</th><th>Instances</th><th>Rows</th><th>Source</th></tr></thead>
     <tbody>{"".join(rows)}</tbody>
   </table>
 </div>"""
+
+
+def render_submission_sets(sets: list[dict[str, Any]]) -> str:
+    return submission_sets_table(sets, 2, "problem-packages")
+
+
+def source_links_for_instance(instance: dict[str, Any]) -> str:
+    links = []
+    if instance.get("source_url"):
+        links.append(f'<a href="{escape(instance["source_url"])}">Instance</a>')
+    if instance.get("solution_url"):
+        links.append(f'<a href="{escape(instance["solution_url"])}">Solution</a>')
+    if instance.get("best_summary_url"):
+        links.append(f'<a href="{escape(instance["best_summary_url"])}">Best submission</a>')
+    return " ".join(links) if links else ""
+
+
+def render_instances(dataset: dict[str, Any]) -> str:
+    instances = dataset["instances"]
+    problem_options = [(problem["name"], problem["title"]) for problem in dataset["problems"]]
+    status_counts = Counter(instance["status"] for instance in instances)
+    stats = "\n".join(
+        [
+            stat_card("Instances", format_count(len(instances))),
+            stat_card("Optimal", format_count(status_counts["optimal"])),
+            stat_card("Best known", format_count(status_counts["best_known"])),
+            stat_card("Open", format_count(status_counts["open"])),
+        ]
+    )
+    rows = []
+    for instance in instances:
+        search_text = " ".join(
+            [
+                instance["instance"],
+                instance["problem_title"],
+                instance.get("family", ""),
+                instance.get("best_submitter", ""),
+                instance.get("best_submission", ""),
+                instance.get("format", ""),
+            ]
+        ).lower()
+        rows.append(
+            f"""<tr data-problem="{escape(instance["problem_dir"])}" data-status="{escape(instance["status"])}" data-search="{escape(search_text)}">
+  <td>{escape(instance["instance"])}</td>
+  <td><a href="../problems/{escape(instance["problem_dir"])}/">{escape(instance["problem_title"])}</a></td>
+  <td>{escape(instance.get("family", ""))}</td>
+  <td>{escape(instance.get("format", ""))}</td>
+  <td><span class="status-tag status-{escape(instance["status"])}">{escape(instance["status_label"])}</span></td>
+  <td data-sort="{escape("" if instance.get("best_numeric") is None else instance["best_numeric"])}">{escape(instance.get("best_value", ""))}</td>
+  <td>{escape(instance.get("best_submitter", ""))}</td>
+  <td data-sort="{escape(instance.get("submission_count", 0))}">{format_count(instance.get("submission_count", 0))}</td>
+  <td>{source_links_for_instance(instance)}</td>
+</tr>"""
+        )
+
+    body = f"""    <section class="page-title">
+      <p class="eyebrow">Benchmark data</p>
+      <h1>Instance browser</h1>
+      <p>Repository instances, known solution-status markers, and submitted results in one searchable table.</p>
+    </section>
+    <section class="stats-grid section-stats">{stats}</section>
+    <section class="filters" data-filter-scope="instances" aria-label="Instance filters">
+      <label>
+        Search
+        <input type="search" data-search placeholder="Instance, problem, submitter">
+      </label>
+      <label>
+        Problem
+        <select data-problem-filter>
+          <option value="">All problems</option>
+          {"".join(f'<option value="{escape(name)}">{escape(title)}</option>' for name, title in problem_options)}
+        </select>
+      </label>
+      <label>
+        Status
+        <select data-status-filter>
+          <option value="">All statuses</option>
+          <option value="optimal">Optimal</option>
+          <option value="best_known">Best known</option>
+          <option value="submitted">Submitted</option>
+          <option value="open">Open</option>
+        </select>
+      </label>
+      <output data-result-count data-result-label="instances">{format_count(len(instances))} instances</output>
+    </section>
+    <div class="table-wrap">
+      <table class="data-table" data-filter-table="instances" data-sort-table>
+        <thead>
+          <tr>
+            <th>Instance</th>
+            <th>Problem</th>
+            <th>Family</th>
+            <th>Format</th>
+            <th>Status</th>
+            <th>Best submitted objective</th>
+            <th>Submitter</th>
+            <th>Rows</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>{"".join(rows)}</tbody>
+      </table>
+    </div>
+"""
+    return page_layout("Instances", body, 1, dataset)
+
+
+def render_leaderboard(dataset: dict[str, Any]) -> str:
+    entries = dataset["leaderboard"]
+    problem_options = [(problem["name"], problem["title"]) for problem in dataset["problems"]]
+    ranked_instances = len({(entry["problem_dir"], entry["instance"]) for entry in entries})
+    submitters = len({entry["submitter"] for entry in entries if entry["submitter"]})
+    stats = "\n".join(
+        [
+            stat_card("Ranked entries", format_count(len(entries))),
+            stat_card("Ranked instances", format_count(ranked_instances)),
+            stat_card("Submitters", format_count(submitters)),
+            stat_card("Problem classes", format_count(len({entry["problem_dir"] for entry in entries}))),
+        ]
+    )
+    rows = []
+    for entry in entries:
+        search_text = " ".join(
+            [
+                entry["instance"],
+                entry["problem_title"],
+                entry["submitter"],
+                entry["submission_set"],
+                entry["modeling"],
+                entry["algorithm"],
+            ]
+        ).lower()
+        rows.append(
+            f"""<tr data-problem="{escape(entry["problem_dir"])}" data-search="{escape(search_text)}">
+  <td data-sort="{escape(entry["rank"])}">{escape(entry["rank"])}</td>
+  <td>{escape(entry["instance"])}</td>
+  <td><a href="../problems/{escape(entry["problem_dir"])}/">{escape(entry["problem_title"])}</a></td>
+  <td data-sort="{escape(entry["numeric_objective"])}">{escape(entry["objective"])}</td>
+  <td>{escape(entry["direction"])}</td>
+  <td>{escape(entry["submitter"])}</td>
+  <td data-sort="{escape(entry["date_key"])}">{escape(entry["date"])}</td>
+  <td>{escape(entry["modeling"])}</td>
+  <td>{escape(entry["algorithm"])}</td>
+  <td><a href="{escape(entry["summary_url"])}">CSV</a></td>
+</tr>"""
+        )
+
+    body = f"""    <section class="page-title">
+      <p class="eyebrow">Community results</p>
+      <h1>Leaderboard</h1>
+      <p>Numeric submitted objectives ranked per problem instance, using each problem class objective direction.</p>
+    </section>
+    <section class="stats-grid section-stats">{stats}</section>
+    <section class="filters" data-filter-scope="leaderboard" aria-label="Leaderboard filters">
+      <label>
+        Search
+        <input type="search" data-search placeholder="Instance, submitter, algorithm">
+      </label>
+      <label>
+        Problem
+        <select data-problem-filter>
+          <option value="">All problems</option>
+          {"".join(f'<option value="{escape(name)}">{escape(title)}</option>' for name, title in problem_options)}
+        </select>
+      </label>
+      <output data-result-count data-result-label="entries">{format_count(len(entries))} entries</output>
+    </section>
+    <div class="table-wrap">
+      <table class="data-table" data-filter-table="leaderboard" data-sort-table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Instance</th>
+            <th>Problem</th>
+            <th>Objective</th>
+            <th>Direction</th>
+            <th>Submitter</th>
+            <th>Date</th>
+            <th>Model</th>
+            <th>Algorithm</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>{"".join(rows)}</tbody>
+      </table>
+    </div>
+"""
+    return page_layout("Leaderboard", body, 1, dataset)
 
 
 def render_problem_page(problem: dict[str, Any], dataset: dict[str, Any]) -> str:
@@ -739,7 +1457,9 @@ def copy_static_assets(root: Path, out_dir: Path) -> list[dict[str, str]]:
 
 def write_site(root: Path, out_dir: Path, dataset: dict[str, Any]) -> None:
     write_text(out_dir / "index.html", render_home(dataset))
+    write_text(out_dir / "instances" / "index.html", render_instances(dataset))
     write_text(out_dir / "submissions" / "index.html", render_submissions(dataset))
+    write_text(out_dir / "leaderboard" / "index.html", render_leaderboard(dataset))
     for problem in dataset["problems"]:
         write_text(out_dir / "problems" / problem["name"] / "index.html", render_problem_page(problem, dataset))
     write_text(out_dir / "assets" / "qoblib-data.json", json.dumps(dataset, indent=2, sort_keys=True) + "\n")
@@ -776,8 +1496,10 @@ def main() -> int:
     print(
         "Built QOBLIB site with "
         f"{dataset['counts']['problems']} problems, "
+        f"{dataset['counts']['instances']} instances, "
         f"{dataset['counts']['submission_sets']} submission sets, "
-        f"{dataset['counts']['results']} result rows."
+        f"{dataset['counts']['results']} result rows, "
+        f"{dataset['counts']['leaderboard_entries']} leaderboard entries."
     )
     if dataset["warnings"]:
         print(f"Warnings: {len(dataset['warnings'])}")
