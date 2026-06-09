@@ -51,6 +51,22 @@ PAPER_IMAGE_PATHS = [
     Path("paper/images/mip_density_optsolvedIn_plot_aug25.png"),
     Path("paper/images/qubo_density_optsolvedIn_plot_aug25.png"),
 ]
+PAPER_DATASETS = [
+    (Path("paper/data/mip_instances_july25.csv"), "MIP"),
+    (Path("paper/data/qubo_instances_aug25.csv"), "QUBO"),
+]
+PAPER_CLASS_TO_PROBLEM = {
+    "marketsplit": "01-marketsplit",
+    "labs": "02-labs",
+    "birkhoff": "03-birkhoff",
+    "steiner": "04-steiner",
+    "sports": "05-sports",
+    "portfolio": "06-portfolio",
+    "independentset": "07-independentset",
+    "network": "08-network",
+    "routing": "09-routing",
+    "topology": "10-topology",
+}
 PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
     "01-marketsplit": {
         "short": "Market Split",
@@ -58,6 +74,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "MIP / QUBO",
         "minimize": True,
         "tags": ["feasibility", "partitioning", "integer data"],
+        "why_care": "These instances stress multi-constraint subset-sum structure, where feasibility is easy to state but difficult to certify at useful sizes.",
+        "instance_interest": "A compact feasibility benchmark for partitioning integer data across many simultaneous subset-sum constraints.",
     },
     "02-labs": {
         "short": "LABS",
@@ -65,6 +83,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "QUBO / Ising",
         "minimize": True,
         "tags": ["autocorrelation", "spin variables", "signal design"],
+        "why_care": "LABS is a canonical spin benchmark with direct links to communications, radar, and cryptography, and it becomes difficult as sequence length grows.",
+        "instance_interest": "A sequence-design benchmark where small objective changes can separate strong search methods from weak ones.",
     },
     "03-birkhoff": {
         "short": "Birkhoff",
@@ -72,6 +92,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "MIP",
         "minimize": True,
         "tags": ["assignment", "decomposition", "sparsity"],
+        "why_care": "Minimum Birkhoff decomposition connects assignment structure, sparse representation, and quantum physics applications through a hard cardinality objective.",
+        "instance_interest": "A decomposition benchmark that tests whether a method can find sparse convex combinations of permutation matrices.",
     },
     "04-steiner": {
         "short": "Steiner Packing",
@@ -79,6 +101,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "MIP",
         "minimize": True,
         "tags": ["VLSI", "routing", "packing"],
+        "why_care": "Steiner tree packing models wire routing pressure in VLSI-style grids, where many connection demands must coexist without conflicts.",
+        "instance_interest": "A routing benchmark for packing disjoint connection structures through constrained grid geometry.",
     },
     "05-sports": {
         "short": "Sports Scheduling",
@@ -86,6 +110,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "CSP / MIP",
         "minimize": True,
         "tags": ["timetabling", "feasibility", "RobinX"],
+        "why_care": "Sports timetabling captures realistic constraint interactions from round-robin tournaments and includes instances selected for diversity and difficulty.",
+        "instance_interest": "A real-world-like scheduling benchmark where feasibility under many interacting constraints is the central challenge.",
     },
     "06-portfolio": {
         "short": "Portfolio",
@@ -93,6 +119,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "QUBO / BQP",
         "minimize": True,
         "tags": ["risk", "transaction costs", "time series"],
+        "why_care": "Portfolio instances add transaction costs, short selling, borrowing costs, and time coupling to a familiar financial optimization model.",
+        "instance_interest": "A finance benchmark for balancing risk, returns, transaction costs, and time-linked binary decisions.",
     },
     "07-independentset": {
         "short": "MIS",
@@ -100,6 +128,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "QUBO / MIP",
         "minimize": False,
         "tags": ["graphs", "stable set", "maximum cardinality"],
+        "why_care": "Maximum independent set is a fundamental graph problem with compact QUBO structure and hard instances from social, biological, and benchmark graphs.",
+        "instance_interest": "A graph benchmark that tests maximum-cardinality search on sparse and dense structures with known comparison points.",
     },
     "08-network": {
         "short": "Network Design",
@@ -107,6 +137,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "MIP",
         "minimize": True,
         "tags": ["flows", "degree constraints", "routing"],
+        "why_care": "Network design represents traffic-routing and degree-constrained infrastructure planning, with objective values tied to congestion.",
+        "instance_interest": "A flow-routing benchmark for constructing sparse directed networks under traffic and degree constraints.",
     },
     "09-routing": {
         "short": "Vehicle Routing",
@@ -114,6 +146,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "MIP",
         "minimize": True,
         "tags": ["VRP", "time windows", "capacity"],
+        "why_care": "Vehicle routing combines route selection, capacity, and time-window pressure, reflecting core logistics and mobility applications.",
+        "instance_interest": "A logistics benchmark for route construction with tight capacity and service-window constraints.",
     },
     "10-topology": {
         "short": "Topology",
@@ -121,6 +155,8 @@ PROBLEM_DETAILS: dict[str, dict[str, Any]] = {
         "formulation": "Graph search / MIP",
         "minimize": True,
         "tags": ["diameter", "degree bound", "graph golf"],
+        "why_care": "Topology design asks for low-diameter graphs under degree limits, a concise model for communication latency and network architecture.",
+        "instance_interest": "A graph-design benchmark where a small diameter improvement can be meaningful and hard to prove.",
     },
 }
 DIRECTORY_INSTANCE_PROBLEMS = {"04-steiner", "06-portfolio"}
@@ -218,6 +254,18 @@ def instance_name_from_file(path: Path) -> str:
     return strip_known_suffixes(strip_known_suffixes(path.name, COMPRESSION_SUFFIXES), INSTANCE_SUFFIXES)
 
 
+def paper_instance_aliases(problem_dir: str, file_name: str) -> list[str]:
+    stem = strip_known_suffixes(file_name, (".lp", ".qs", ".mps", ".gz", ".xz"))
+    aliases = [stem]
+    if problem_dir == "03-birkhoff":
+        match = re.match(r"^bh(?P<density>[DS])-(?P<size>\d+)-0*(?P<index>\d+)$", stem)
+        if match:
+            size = int(match.group("size"))
+            density = size * size if match.group("density") == "D" else size
+            aliases.append(f"B{size}_{density}_{int(match.group('index'))}")
+    return list(dict.fromkeys(aliases))
+
+
 def instance_format(path: Path) -> str:
     if path.is_dir():
         return "directory"
@@ -271,6 +319,32 @@ def status_label(status: str) -> str:
         "submitted": "Submitted",
         "open": "Open",
     }.get(status, status.replace("_", " ").title())
+
+
+def short_metric_value(value: str) -> str:
+    parsed = parse_numeric(value)
+    if parsed is None:
+        return value
+    if parsed.is_integer():
+        return str(int(parsed))
+    return f"{parsed:.3g}"
+
+
+def format_paper_metric(metric: dict[str, str]) -> str:
+    parts = [metric["formulation"]]
+    if metric.get("num_vars"):
+        parts.append(f"{short_metric_value(metric['num_vars'])} vars")
+    if metric.get("density") and metric["density"].lower() != "n/a":
+        parts.append(f"density {short_metric_value(metric['density'])}")
+    if metric.get("optimal"):
+        parts.append(f"optimal {metric['optimal']}")
+    elif metric.get("feasible"):
+        parts.append(f"feasible {metric['feasible']}")
+    return ", ".join(parts)
+
+
+def format_paper_context(metrics: list[dict[str, str]]) -> str:
+    return "; ".join(format_paper_metric(metric) for metric in metrics)
 
 
 def parse_submission_prefix_date(name: str) -> dt.datetime | None:
@@ -337,6 +411,37 @@ def count_files(path: Path) -> int:
     return sum(1 for child in path.rglob("*") if child.is_file() and not child.name.startswith("."))
 
 
+def collect_paper_metrics(root: Path) -> dict[tuple[str, str], list[dict[str, str]]]:
+    metrics: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+    for rel_path, formulation in PAPER_DATASETS:
+        path = root / rel_path
+        if not path.exists():
+            continue
+        with path.open(newline="", encoding="utf-8-sig") as file:
+            for row in csv.DictReader(file):
+                problem_dir = PAPER_CLASS_TO_PROBLEM.get((row.get("class") or "").strip())
+                file_name = (row.get("file") or "").strip()
+                if not problem_dir or not file_name:
+                    continue
+                metric = {
+                    "formulation": formulation,
+                    "file": file_name,
+                    "num_vars": (row.get("num_vars") or "").strip(),
+                    "num_constraints": (row.get("num_constraints") or "").strip(),
+                    "density": (row.get("density") or "").strip(),
+                    "coeff_range": (row.get("coeff_range") or "").strip(),
+                    "obj_value": (row.get("obj_value") or "").strip(),
+                    "optimal": (row.get("optimal") or "").strip(),
+                    "feasible": (row.get("feasible") or "").strip(),
+                    "problem_size": (row.get("problem_size") or "").strip(),
+                }
+                for instance in paper_instance_aliases(problem_dir, file_name):
+                    metrics[(problem_dir, instance)].append(metric)
+    for values in metrics.values():
+        values.sort(key=lambda item: item["formulation"])
+    return dict(metrics)
+
+
 def problem_info(root: Path) -> dict[str, dict[str, str]]:
     table_info = parse_problem_table(root)
     info: dict[str, dict[str, str]] = {}
@@ -355,6 +460,8 @@ def problem_info(root: Path) -> dict[str, dict[str, str]]:
             "formulation": details.get("formulation", ""),
             "minimize": details.get("minimize", True),
             "tags": details.get("tags", []),
+            "why_care": details.get("why_care", ""),
+            "instance_interest": details.get("instance_interest", ""),
         }
     return info
 
@@ -513,6 +620,8 @@ def collect_problems(
                 "formulation": meta["formulation"],
                 "minimize": meta["minimize"],
                 "tags": meta["tags"],
+                "why_care": meta["why_care"],
+                "instance_interest": meta["instance_interest"],
                 "path": rel_problem,
                 "page": f"problems/{problem_dir.name}/",
                 "source_url": tree_url(repo_url, ref, rel_problem),
@@ -672,6 +781,7 @@ def collect_instances(
     problem_lookup = {problem["name"]: problem for problem in problems}
     instances = collect_instance_sources(root, problems, repo_url, ref)
     best_results, result_counts = best_results_by_instance(results, problem_lookup)
+    paper_metrics = collect_paper_metrics(root)
     solution_indexes = {
         problem["name"]: collect_solution_statuses(root, problem["name"], repo_url, ref)
         for problem in problems
@@ -740,10 +850,15 @@ def collect_instances(
             status = "submitted"
         else:
             status = "open"
+        metrics = paper_metrics.get(key, [])
 
         collected.append(
             {
                 **entry,
+                "why_care": problem_lookup.get(problem_name, {}).get("instance_interest", ""),
+                "problem_why_care": problem_lookup.get(problem_name, {}).get("why_care", ""),
+                "paper_metrics": metrics,
+                "paper_context": format_paper_context(metrics),
                 "status": status,
                 "status_label": status_label(status),
                 "solution_status": solution_status,
@@ -922,6 +1037,27 @@ def problem_meta_text(problem: dict[str, Any]) -> str:
     return " / ".join(part for part in parts if part)
 
 
+def repo_file_url(dataset: dict[str, Any], rel_path: str) -> str:
+    return source_path_url(dataset["repo_url"], dataset["ref"], rel_path)
+
+
+def render_submit_callout(dataset: dict[str, Any], title: str = "Submit a solution") -> str:
+    contributing_url = repo_file_url(dataset, "CONTRIBUTING.md")
+    template_url = repo_file_url(dataset, "misc/submission_template.csv")
+    return f"""<section class="callout submit-callout">
+  <div>
+    <p class="eyebrow">Contribute results</p>
+    <h2>{escape(title)}</h2>
+    <p>Have a better bound, a new feasible solution, a quantum run, or a useful negative result? QOBLIB accepts benchmark submissions by pull request using the canonical summary CSV template.</p>
+  </div>
+  <div class="callout-actions">
+    <a class="button primary" href="{escape(contributing_url)}">Submission guide</a>
+    <a class="button" href="{escape(template_url)}">CSV template</a>
+    <a class="button" href="{escape(dataset["repo_url"])}">Open repository</a>
+  </div>
+</section>"""
+
+
 def render_home(dataset: dict[str, Any]) -> str:
     counts = dataset["counts"]
     stats = "\n".join(
@@ -942,6 +1078,7 @@ def render_home(dataset: dict[str, Any]) -> str:
   <h3><a href="{escape(problem["page"])}">{escape(problem["title"])}</a></h3>
   <p class="problem-meta">{escape(problem_meta_text(problem))}</p>
   <p>{escape(problem["description"])}</p>
+  <p class="why-care">{escape(problem["why_care"])}</p>
   <dl class="compact-stats">
     <div><dt>Instances</dt><dd>{format_count(problem_counts["instances"])}</dd></div>
     <div><dt>Submissions</dt><dd>{format_count(problem_counts["submission_sets"])}</dd></div>
@@ -986,6 +1123,7 @@ def render_home(dataset: dict[str, Any]) -> str:
       </div>
       <div class="stats-grid">{stats}</div>
     </section>
+    {render_submit_callout(dataset)}
     <section class="section">
       <div class="section-heading">
         <h2>Problem classes</h2>
@@ -1080,6 +1218,7 @@ def render_submissions(dataset: dict[str, Any]) -> str:
       <p>{format_count(len(results))} parsed result rows from canonical QOBLIB summary CSV files, grouped by submission package.</p>
     </section>
     <section class="stats-grid section-stats">{stats}</section>
+    {render_submit_callout(dataset)}
     <section class="section">
       <div class="section-heading">
         <h2>Submission packages</h2>
@@ -1211,12 +1350,20 @@ def render_instances(dataset: dict[str, Any]) -> str:
                 instance.get("best_submitter", ""),
                 instance.get("best_submission", ""),
                 instance.get("format", ""),
+                instance.get("why_care", ""),
+                instance.get("paper_context", ""),
             ]
         ).lower()
+        context_line = (
+            f'<span class="paper-context">Paper: {escape(instance["paper_context"])}</span>'
+            if instance.get("paper_context")
+            else ""
+        )
         rows.append(
             f"""<tr data-problem="{escape(instance["problem_dir"])}" data-status="{escape(instance["status"])}" data-search="{escape(search_text)}">
   <td>{escape(instance["instance"])}</td>
   <td><a href="../problems/{escape(instance["problem_dir"])}/">{escape(instance["problem_title"])}</a></td>
+  <td>{escape(instance.get("why_care", ""))}{context_line}</td>
   <td>{escape(instance.get("family", ""))}</td>
   <td>{escape(instance.get("format", ""))}</td>
   <td><span class="status-tag status-{escape(instance["status"])}">{escape(instance["status_label"])}</span></td>
@@ -1233,6 +1380,7 @@ def render_instances(dataset: dict[str, Any]) -> str:
       <p>Repository instances, known solution-status markers, and submitted results in one searchable table.</p>
     </section>
     <section class="stats-grid section-stats">{stats}</section>
+    {render_submit_callout(dataset, "Submit results for an instance")}
     <section class="filters" data-filter-scope="instances" aria-label="Instance filters">
       <label>
         Search
@@ -1258,11 +1406,12 @@ def render_instances(dataset: dict[str, Any]) -> str:
       <output data-result-count data-result-label="instances">{format_count(len(instances))} instances</output>
     </section>
     <div class="table-wrap">
-      <table class="data-table" data-filter-table="instances" data-sort-table>
+      <table class="data-table instance-table" data-filter-table="instances" data-sort-table>
         <thead>
           <tr>
             <th>Instance</th>
             <th>Problem</th>
+            <th>Why benchmark it</th>
             <th>Family</th>
             <th>Format</th>
             <th>Status</th>
@@ -1325,6 +1474,7 @@ def render_leaderboard(dataset: dict[str, Any]) -> str:
       <p>Numeric submitted objectives ranked per problem instance, using each problem class objective direction.</p>
     </section>
     <section class="stats-grid section-stats">{stats}</section>
+    {render_submit_callout(dataset, "Add a result to the leaderboard")}
     <section class="filters" data-filter-scope="leaderboard" aria-label="Leaderboard filters">
       <label>
         Search
@@ -1391,9 +1541,22 @@ def render_problem_page(problem: dict[str, Any], dataset: dict[str, Any]) -> str
       <p class="eyebrow">Problem class {escape(problem["number"])}</p>
       <h1>{escape(problem["title"])}</h1>
       <p>{escape(problem["description"])}</p>
+      <p>{escape(problem["why_care"])}</p>
       <div class="hero-actions">{"".join(quick_links)}</div>
     </section>
     <section class="stats-grid section-stats">{stats}</section>
+    <section class="callout">
+      <div>
+        <p class="eyebrow">Why benchmark these instances</p>
+        <h2>{escape(problem["short"])}</h2>
+        <p>{escape(problem["instance_interest"])}</p>
+      </div>
+      <div class="callout-actions">
+        <a class="button primary" href="../../instances/">Browse all instances</a>
+        <a class="button" href="../../leaderboard/">Compare results</a>
+      </div>
+    </section>
+    {render_submit_callout(dataset, f"Submit a {problem['short']} result")}
     <section class="section">
       <div class="section-heading">
         <h2>Submission sets</h2>

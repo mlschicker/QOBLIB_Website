@@ -157,12 +157,21 @@ class BuildSiteTests(unittest.TestCase):
             self.assertTrue((out / "submissions" / "index.html").is_file())
             self.assertTrue((out / "leaderboard" / "index.html").is_file())
             self.assertTrue((out / "problems" / "01-demo" / "index.html").is_file())
+            index_html = (out / "index.html").read_text(encoding="utf-8")
+            instances_html = (out / "instances" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Submit a solution", index_html)
+            self.assertIn("CSV template", index_html)
+            self.assertIn("Why benchmark it", instances_html)
             data = json.loads((out / "assets" / "qoblib-data.json").read_text(encoding="utf-8"))
             self.assertEqual(data["generated_at"], "2026-01-01T00:00:00Z")
             self.assertEqual(data["counts"]["results"], 1)
             self.assertEqual(data["counts"]["instances"], 1)
             self.assertEqual(data["counts"]["leaderboard_entries"], 1)
             self.assertEqual(data["problems"][0]["title"], "Demo Problem")
+            self.assertIn("why_care", data["problems"][0])
+            self.assertIn("why_care", data["instances"][0])
+            self.assertIn("paper_metrics", data["instances"][0])
+            self.assertIn("paper_context", data["instances"][0])
             self.assertEqual(data["instances"][0]["status"], "optimal")
             self.assertEqual(data["leaderboard"][0]["rank"], 1)
 
@@ -189,6 +198,51 @@ class BuildSiteTests(unittest.TestCase):
                 instance["solution_url"],
                 "https://github.com/example/QOBLIB/blob/main/01-demo/solutions/demo001.opt.sol",
             )
+
+    def test_paper_metrics_parse_birkhoff_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paper_dir = root / "paper" / "data"
+            paper_dir.mkdir(parents=True)
+            with (paper_dir / "mip_instances_july25.csv").open("w", newline="", encoding="utf-8") as file:
+                writer = csv.DictWriter(
+                    file,
+                    fieldnames=[
+                        "class",
+                        "file",
+                        "num_vars",
+                        "num_constraints",
+                        "density",
+                        "coeff_range",
+                        "coeff_min",
+                        "coeff_max",
+                        "obj_value",
+                        "optimal",
+                        "file_available",
+                        "problem_size",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "class": "birkhoff",
+                        "file": "bhD-4-001.lp",
+                        "num_vars": "42",
+                        "num_constraints": "7",
+                        "density": "0.25",
+                        "coeff_range": "9",
+                        "coeff_min": "0",
+                        "coeff_max": "9",
+                        "obj_value": "4",
+                        "optimal": "yes",
+                        "file_available": "yes",
+                        "problem_size": "small",
+                    }
+                )
+            metrics = build_site.collect_paper_metrics(root)
+            self.assertIn(("03-birkhoff", "bhD-4-001"), metrics)
+            self.assertIn(("03-birkhoff", "B4_16_1"), metrics)
+            self.assertIn("MIP", build_site.format_paper_context(metrics[("03-birkhoff", "B4_16_1")]))
 
 
 if __name__ == "__main__":
