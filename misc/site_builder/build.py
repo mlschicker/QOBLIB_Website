@@ -115,6 +115,47 @@ def _write_problem_chunks(problem_id: str, data: dict, problems_root: Path) -> t
     return submissions, data["instance_count"]
 
 
+def _remove_path(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _refuse_unsafe_output_dir(root: Path, out_dir: Path) -> None:
+    root_resolved = root.resolve()
+    out_resolved = out_dir.resolve()
+    unsafe = {
+        Path(out_resolved.anchor),
+        root_resolved,
+        root_resolved.parent,
+        Path.home().resolve(),
+        Path("/tmp").resolve(),
+        Path("/var/tmp").resolve(),
+    }
+    if out_resolved in unsafe:
+        raise SystemExit(f"Refusing to clean unsafe site output directory: {out_dir}")
+
+
+def clean_site_output(root: Path, out_dir: Path, copy_static: bool) -> None:
+    """Remove stale generated output before a build.
+
+    Full site builds own the whole output directory. Data-only builds are used
+    to refresh JSON under an existing static frontend, so they only clear
+    ``<out>/data``.
+    """
+    if copy_static:
+        _refuse_unsafe_output_dir(root, out_dir)
+        if out_dir.exists() or out_dir.is_symlink():
+            _remove_path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return
+
+    data_root = out_dir / "data"
+    if data_root.exists() or data_root.is_symlink():
+        _remove_path(data_root)
+
+
 def build_data(out_dir: Path, built_at: str | None = None) -> dict:
     """Scan the repository and write the split JSON payload under ``out_dir/data``."""
     data_root = out_dir / "data"
@@ -189,6 +230,7 @@ def build_site(
     root = Path(root)
     out = Path(out)
     config.configure(root, repo_url, ref)
+    clean_site_output(root, out, copy_static=copy_static)
     if copy_static:
         copy_static_frontend(root, out)
     return build_data(out, built_at=built_at)

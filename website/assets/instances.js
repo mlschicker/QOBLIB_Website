@@ -357,7 +357,7 @@ function renderMipChart(points) {
                     data-model-key="${qEsc(p.model_key || modelKeyForPoint(p))}"
                     data-vars="${p.num_vars}"
                     data-density="${p.density}"
-                    data-model="${qEsc(p.model_approach || p.model_kind || "model")}" 
+                    data-model="${qEsc(p.model_approach || p.model_kind || "model")}"
                     data-url="${qEsc(href)}"
                     cx="${xPos(p.num_vars)}"
                     cy="${yPos(p.density)}"

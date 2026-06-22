@@ -209,12 +209,12 @@ PROBLEM_META: dict[str, dict] = {
         "short": "Multi-period with Transaction Costs & Short Selling",
         "type": "Binary + Continuous",
         "formulation": "MIQP / QUBO",
-        "minimize": False,
+        "minimize": True,
         "tags": ["finance", "MIQP", "real-world"],
-        "formula": "max r^T w - λ w^T Σ w  s.t.  Σ z_i ≤ k,  w_i ≤ M z_i,  z ∈ {0,1}^n",
+        "formula": "min Σ_t (λ risk_t - profit_t + transaction and borrowing costs)",
         "description": (
-            "Maximise risk-adjusted return over multiple periods with transaction costs, "
-            "cardinality constraints, short-selling limits, and turnover bounds. "
+            "Minimise risk-adjusted portfolio cost over multiple periods with transaction "
+            "costs, cardinality constraints, short-selling limits, and turnover bounds. "
             "Multi-period structure introduces complex intertemporal dependencies."
         ),
     },

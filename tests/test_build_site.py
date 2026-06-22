@@ -134,6 +134,38 @@ class BuildSiteTests(unittest.TestCase):
         ):
             self.assertTrue((out / rel).is_file(), f"missing {rel}")
 
+    def test_full_site_build_cleans_stale_output(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        make_fixture(root)
+        out = root / "_site"
+        (out / "assets").mkdir(parents=True)
+        (out / "assets" / "stale.js").write_text("old\n", encoding="utf-8")
+
+        build_site(out=out, root=root, built_at="2026-01-01T00:00:00Z")
+
+        self.assertFalse((out / "assets" / "stale.js").exists())
+        self.assertTrue((out / "index.html").is_file())
+        self.assertTrue((out / "data" / "index.json").is_file())
+
+    def test_data_only_build_cleans_generated_data_only(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        make_fixture(root)
+        out = root / "_site"
+        out.mkdir()
+        (out / "index.html").write_text("<title>keep</title>\n", encoding="utf-8")
+        (out / "data").mkdir()
+        (out / "data" / "stale.json").write_text("{}\n", encoding="utf-8")
+
+        build_site(out=out, root=root, copy_static=False, built_at="2026-01-01T00:00:00Z")
+
+        self.assertTrue((out / "index.html").is_file())
+        self.assertFalse((out / "data" / "stale.json").exists())
+        self.assertTrue((out / "data" / "index.json").is_file())
+
     def test_builder_emits_no_html(self) -> None:
         """The builder itself must not generate HTML — with the static copy
         disabled, the output contains only JSON data."""
@@ -168,6 +200,20 @@ class BuildSiteTests(unittest.TestCase):
         self.assertEqual(meta["solved_count"], 1)
         self.assertIn("Overview", meta["description_md"])
         self.assertEqual([c["key"] for c in meta["columns"]], ["markets", "variables", "coeff_range"])
+
+    def test_portfolio_metadata_matches_minimization_readme(self) -> None:
+        meta = config.PROBLEM_META["06"]
+        self.assertTrue(meta["minimize"])
+        self.assertTrue(meta["formula"].startswith("min "))
+        self.assertIn("Minimise", meta["description"])
+
+    def test_frontend_escapes_attributes_and_sanitizes_markdown(self) -> None:
+        common_js = (REPO_ROOT / "website" / "assets" / "common.js").read_text(encoding="utf-8")
+        self.assertIn('.replace(/"/g, "&quot;")', common_js)
+        self.assertIn(".replace(/'/g, \"&#39;\")", common_js)
+        self.assertIn("function sanitizeHtml(html)", common_js)
+        self.assertIn("sanitizeHtml(window.marked.parse(protectedMd))", common_js)
+        self.assertIn("!safeUrl(attr.value)", common_js)
 
     def test_instance_status_metrics_and_best_value(self) -> None:
         _root, out, _summary = self.build()

@@ -14,7 +14,82 @@ function esc(s) {
     return String(s ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function safeUrl(value) {
+    const s = String(value ?? "").trim();
+    if (!s) return true;
+    if (s.startsWith("#") || s.startsWith("/") || s.startsWith("./") || s.startsWith("../")) return true;
+    const match = s.match(/^([a-z][a-z0-9+.-]*):/i);
+    return !match || ["http", "https", "mailto"].includes(match[1].toLowerCase());
+}
+
+function sanitizeHtml(html) {
+    if (typeof document === "undefined") return esc(html);
+
+    const template = document.createElement("template");
+    template.innerHTML = String(html ?? "");
+    const allowedTags = new Set([
+        "A", "B", "BLOCKQUOTE", "BR", "CODE", "DD", "DEL", "DIV", "DL", "DT", "EM",
+        "FIGCAPTION", "FIGURE", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "I", "IMG",
+        "LI", "OL", "P", "PRE", "S", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY",
+        "TD", "TH", "THEAD", "TR", "UL",
+    ]);
+    const removeWithContent = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "LINK", "META", "BASE"]);
+    const globalAttrs = new Set(["title"]);
+    const tagAttrs = {
+        A: new Set(["href", "title"]),
+        IMG: new Set(["src", "alt", "title", "width", "height"]),
+        TH: new Set(["colspan", "rowspan", "align"]),
+        TD: new Set(["colspan", "rowspan", "align"]),
+    };
+    const urlAttrs = new Set(["href", "src"]);
+
+    function sanitizeNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) return;
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+            node.remove();
+            return;
+        }
+
+        const tag = node.tagName.toUpperCase();
+        if (removeWithContent.has(tag)) {
+            node.remove();
+            return;
+        }
+        if (!allowedTags.has(tag)) {
+            const parent = node.parentNode;
+            while (node.firstChild) parent.insertBefore(node.firstChild, node);
+            node.remove();
+            sanitizeChildren(parent);
+            return;
+        }
+
+        const allowedAttrs = tagAttrs[tag] || new Set();
+        for (const attr of Array.from(node.attributes)) {
+            const name = attr.name.toLowerCase();
+            const allowed = globalAttrs.has(name) || allowedAttrs.has(attr.name) || allowedAttrs.has(name);
+            if (!allowed || name.startsWith("on") || name === "style") {
+                node.removeAttribute(attr.name);
+                continue;
+            }
+            if (urlAttrs.has(name) && !safeUrl(attr.value)) {
+                node.removeAttribute(attr.name);
+            }
+        }
+
+        sanitizeChildren(node);
+    }
+
+    function sanitizeChildren(parent) {
+        for (const child of Array.from(parent.childNodes)) sanitizeNode(child);
+    }
+
+    sanitizeChildren(template.content);
+    return template.innerHTML;
 }
 
 function fmtBytes(b) {
@@ -188,8 +263,8 @@ function renderMarkdown(md) {
         .replace(/\\\[[\s\S]+?\\\]/g, keep)    // \[ display \]
         .replace(/\\\([\s\S]+?\\\)/g, keep)    // \( inline \)
         .replace(/\$(?!\$)[^\n]*?\$/g, keep);  // $ inline $ (single line)
-    const html = window.marked.parse(protectedMd);
-    return html.replace(/@@QMATH(\d+)@@/g, (_, i) => stash[Number(i)]);
+    const html = sanitizeHtml(window.marked.parse(protectedMd));
+    return html.replace(/@@QMATH(\d+)@@/g, (_, i) => esc(stash[Number(i)]));
 }
 
 function renderMath(root) {
