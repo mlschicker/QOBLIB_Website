@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>(function(){try{var t=localStorage.getItem("qoblib-theme");if(t!=="dark"&&t!=="light"){t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+    <title>QOBLIB - Submissions</title>
+    <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-nav="submissions">
+    <nav>
+        <div class="nav-inner">
+            <a class="logo" href="index.html"><em>Q</em>OBLIB</a>
+            <div class="nav-links">
+                <a class="nl" data-nav="home" href="index.html">Home</a>
+                <a class="nl" data-nav="problems" href="problems.html">Problems</a>
+                <a class="nl" data-nav="instances" href="instances.html">Instances</a>
+                <a class="nl" data-nav="submissions" href="submissions.html">Submissions</a>
+                <a class="nl" data-nav="leaderboard" href="leaderboard.html">Leaderboard</a>
+                <a class="nl" data-nav="submit" href="submit.html">Submit</a>
+            </div>
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="ph">
+            <h2>Submissions</h2>
+            <p>One row per uploaded submission package, with links to the problem page and package details.</p>
+        </div>
+
+        <section class="stats-bar">
+            <div class="stat">
+                <div class="stat-num" id="sub-stat-packages">0</div>
+                <div class="stat-lbl">Packages</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" id="sub-stat-instances">0</div>
+                <div class="stat-lbl">Listed Instances</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" id="sub-stat-problems">0</div>
+                <div class="stat-lbl">Problems Represented</div>
+            </div>
+            <div class="stat">
+                <div class="stat-num" id="sub-stat-authors">0</div>
+                <div class="stat-lbl">Authors / Teams</div>
+            </div>
+        </section>
+
+        <div class="filters">
+            <input type="text" class="fi-grow" id="sub-search" placeholder="Search by package, author, or problem..." oninput="renderSubmissions()" />
+            <select id="sub-prob" onchange="renderSubmissions()">
+                <option value="">All problem classes</option>
+            </select>
+            <select id="sub-cat" onchange="renderSubmissions()">
+                <option value="">All paradigms</option>
+                <option value="quantum_hw">Quantum hardware</option>
+                <option value="quantum_sim">Quantum simulator</option>
+                <option value="classical">Classical</option>
+            </select>
+            <select id="sub-sort" onchange="renderSubmissions()">
+                <option value="latest">Latest first</option>
+                <option value="problem">Problem</option>
+                <option value="instances">Most instances</option>
+                <option value="package">Package id</option>
+            </select>
+            <span class="fi-count" id="sub-count"></span>
+            <button class="btn btn-ghost btn-sm" type="button" id="sub-download" onclick="downloadSubmissionsCsv()">⬇ Download CSV</button>
+        </div>
+
+        <div class="tw" id="submissions-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Submission</th>
+                        <th>Problem</th>
+                        <th>Type</th>
+                        <th>Submitter</th>
+                        <th>Date</th>
+                        <th style="text-align:right">Instances</th>
+                        <th style="text-align:right">Files</th>
+                        <th>Open</th>
+                    </tr>
+                </thead>
+                <tbody id="sub-tbody">
+                    <tr><td colspan="8" class="loading">Loading submissions</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span id="footer-build">Generated from the QOBLIB repository.</span>
+        <span><a href="data/index.json">Download site data</a></span>
+    </footer>
+
+    <script src="assets/common.js"></script>
+    <script src="assets/submissions.js"></script>
+</body>
+</html>

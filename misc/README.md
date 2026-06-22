@@ -167,3 +167,53 @@ Template file for submission CSV format.
 Contains instance generation utilities used across multiple problem classes.
 
 **Use case:** Shared instance generation code and tools.
+
+## Website (GitHub Pages)
+
+The public site is a static frontend (committed under [`../website/`](../website))
+driven entirely by JSON data generated from the repository. The Python side
+produces **only data — never HTML**.
+
+### build_site.py
+
+Thin command-line entry point. Copies the static frontend into the output
+directory and writes the generated data under `<out>/data`.
+
+**Usage:**
+```bash
+# Assemble the full site into _site/ (static frontend + generated data)
+python misc/build_site.py --out _site
+
+# Point download links at a fork / commit (used for PR previews)
+python misc/build_site.py --out _site --repo-url <url> --ref <sha>
+
+# Regenerate only the JSON data (skip copying the static frontend)
+python misc/build_site.py --out _site --no-static
+```
+
+The GitHub Pages workflow (`.github/workflows/pages.yml`) runs the unit tests in
+[`../tests`](../tests) and then this command, deploying the assembled `_site/`.
+
+### site_builder/
+
+The data builder, split into focused modules:
+
+| Module | Responsibility |
+| --- | --- |
+| `config.py` | Build context (repo/ref URL helpers), problem metadata, table columns |
+| `text.py` | Date / name / number parsing and README section extraction |
+| `classify.py` | Quantum-hardware / quantum-sim / classical submission classification |
+| `solutions.py` | Reference-solution / best-known-value readers |
+| `submissions.py` | Canonical `*_summary.csv` submission reader |
+| `models.py` | Downloadable model-artifact scanning |
+| `metrics.py` | Per-instance metric columns |
+| `instances.py` | Instance discovery (flat, bundle, recursive, Birkhoff) |
+| `problem.py` | Per-problem payload assembly + best-value resolution |
+| `build.py` | Orchestration and JSON output / static-copy |
+
+**Output layout** (consumed by the frontend's `fetch` calls):
+```
+<out>/data/index.json
+<out>/data/leaderboard.json
+<out>/data/problems/<id>/{meta,instances,solutions,submissions,submission_groups,instance_submissions}.json
+```

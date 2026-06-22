@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>(function(){try{var t=localStorage.getItem("qoblib-theme");if(t!=="dark"&&t!=="light"){t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+    <title>QOBLIB - Leaderboard</title>
+    <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-nav="leaderboard">
+    <nav>
+        <div class="nav-inner">
+            <a class="logo" href="index.html"><em>Q</em>OBLIB</a>
+            <div class="nav-links">
+                <a class="nl" data-nav="home" href="index.html">Home</a>
+                <a class="nl" data-nav="problems" href="problems.html">Problems</a>
+                <a class="nl" data-nav="instances" href="instances.html">Instances</a>
+                <a class="nl" data-nav="submissions" href="submissions.html">Submissions</a>
+                <a class="nl" data-nav="leaderboard" href="leaderboard.html">Leaderboard</a>
+                <a class="nl" data-nav="submit" href="submit.html">Submit</a>
+            </div>
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="ph">
+            <h2>Leaderboard</h2>
+            <p>The current record for each instance: the best feasible submission and who holds it.</p>
+        </div>
+
+        <section class="callout">
+            <div>
+                <div class="hero-eyebrow">Contribute results</div>
+                <h2>Have results to add?</h2>
+                <p>
+                    Use the guided <strong>Submission Builder</strong> to enter results for many instances at once. It
+                    validates everything live — instance names, value ranges against known optima, and the canonical CSV
+                    format — then exports ready-to-commit files.
+                </p>
+            </div>
+            <div class="callout-actions">
+                <a class="btn btn-navy" href="submit.html">Open the Submission Builder →</a>
+            </div>
+        </section>
+
+        <div class="filters">
+            <select id="lb-prob" onchange="renderLeaderboard()">
+                <option value="">All problem classes</option>
+            </select>
+            <select id="lb-inst" onchange="renderLeaderboard()">
+                <option value="">All instances</option>
+            </select>
+            <span class="fi-count" id="lb-count"></span>
+            <button class="btn btn-ghost btn-sm" type="button" id="lb-download" onclick="downloadLeaderboardCsv()">⬇ Download CSV</button>
+        </div>
+
+        <div id="lb-content">
+            <div class="loading">Loading leaderboard</div>
+        </div>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <footer class="site-footer">
+        <span id="footer-build">Generated from the QOBLIB repository.</span>
+        <span><a href="data/index.json">Download site data</a></span>
+    </footer>
+
+    <script src="assets/common.js"></script>
+    <script src="assets/leaderboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+name: Validate Submission
+
+# Runs the authoritative submission checker (misc/check_submission.py) on every
+# pull request that touches a submissions/ folder, and reports the result on the PR.
+# This complements the in-browser validator on the website: the browser catches
+# format / metadata / value-range mistakes instantly, while this job additionally
+# runs the per-problem solution-feasibility checkers, which a browser cannot.
+
+on:
+  pull_request:
+    paths:
+      - "**/submissions/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust (for per-problem solution checkers)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            **/check/target
+          key: cargo-checkers-${{ runner.os }}
+
+      - name: Validate changed submissions
+        id: validate
+        shell: bash
+        run: |
+          set -o pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+
+          # Submission roots are <NN-problem>/submissions/<submission-name>.
+          # Instance directories may be nested in arbitrary subfolders below that
+          # root; the checker discovers them recursively.
+          mapfile -t ROOTS < <(
+            git diff --name-only "$BASE" "$HEAD" \
+              | grep -E '^[0-9]{2}-[^/]+/submissions/[^/]+/' \
+              | sed -E 's#^([0-9]{2}-[^/]+/submissions/[^/]+)/.*#\1#' \
+              | sort -u
+          )
+
+          {
+            echo "## QOBLIB submission validation"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${#ROOTS[@]}" -eq 0 ]; then
+            echo "No submission directories changed — nothing to validate." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          FAILED=0
+          for root in "${ROOTS[@]}"; do
+            echo "::group::Validating $root"
+            {
+              echo "### \`$root\`"
+              echo ""
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            if python misc/check_submission.py "$root" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"; then
+              status="OK"
+            else
+              status="FAILED"
+              FAILED=1
+            fi
+
+            {
+              echo '```'
+              echo ""
+              echo "**Result: $status**"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more submissions failed validation. See the job summary for details."
+            exit 1
+          fi
+          echo "All changed submissions passed validation. ✅"

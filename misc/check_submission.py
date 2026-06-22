@@ -17,6 +17,12 @@ validate_submission.py
 
 Validate a benchmarking-library submission layout and contents.
 
+Instance directories are discovered recursively: an instance directory is any
+directory containing a "<instance>_summary.csv" file. It may sit directly under
+the submission root or be nested inside arbitrary grouping subfolders, e.g.
+  SUBMISSION_ROOT/<group>/<instance>/<instance>_summary.csv
+Both flat and nested layouts are accepted.
+
 Checks for each instance directory:
   - Required files:
       <instance>_summary.csv
@@ -131,14 +137,34 @@ class InstanceReport:
 
 
 def find_instance_dirs(root: Path, pattern: Optional[str]) -> List[Path]:
-    dirs = [p for p in root.iterdir() if p.is_dir()]
+    """Locate the instance directories under a submission ``root``.
 
-    # Exclude any directory named "misc"
-    dirs = [p for p in dirs if p.name.lower() != "misc"]
+    An instance directory is any directory that contains a ``*_summary.csv``
+    file. Such directories may sit directly under the submission root or be
+    nested inside arbitrary grouping subfolders, e.g.
+    ``<root>/<group>/<instance>/<instance>_summary.csv`` — both layouts are
+    accepted. Directories named ``misc`` (at any depth) are skipped, and
+    ``pattern`` filters on the instance directory name.
+    """
+    instance_dirs: List[Path] = []
+    seen: set = set()
+    for summary in sorted(root.rglob("*" + SUMMARY_CSV_SUFFIX)):
+        if not summary.is_file():
+            continue
+        inst_dir = summary.parent
+        # The root itself is never an instance directory; instances live in a
+        # (possibly nested) subdirectory below it.
+        if inst_dir == root or inst_dir in seen:
+            continue
+        rel_parts = [part.lower() for part in inst_dir.relative_to(root).parts]
+        if "misc" in rel_parts:
+            continue
+        seen.add(inst_dir)
+        instance_dirs.append(inst_dir)
 
     if pattern:
-        dirs = [p for p in dirs if fnmatch.fnmatch(p.name, pattern)]
-    return sorted(dirs, key=lambda p: p.name.lower())
+        instance_dirs = [p for p in instance_dirs if fnmatch.fnmatch(p.name, pattern)]
+    return sorted(instance_dirs, key=lambda p: p.relative_to(root).as_posix().lower())
 
 
 def validate_csv(instance: str, csv_path: Path, strict_problem_match: bool, report: InstanceReport) -> List[Dict[str, str]]:

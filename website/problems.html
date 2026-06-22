@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>(function(){try{var t=localStorage.getItem("qoblib-theme");if(t!=="dark"&&t!=="light"){t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+    <title>QOBLIB - Problems</title>
+    <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-nav="problems">
+    <nav>
+        <div class="nav-inner">
+            <a class="logo" href="index.html"><em>Q</em>OBLIB</a>
+            <div class="nav-links">
+                <a class="nl" data-nav="home" href="index.html">Home</a>
+                <a class="nl" data-nav="problems" href="problems.html">Problems</a>
+                <a class="nl" data-nav="instances" href="instances.html">Instances</a>
+                <a class="nl" data-nav="submissions" href="submissions.html">Submissions</a>
+                <a class="nl" data-nav="leaderboard" href="leaderboard.html">Leaderboard</a>
+                <a class="nl" data-nav="submit" href="submit.html">Submit</a>
+            </div>
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="ph">
+            <h2>Problem Classes</h2>
+            <p>
+                The Intractable Decathlon — ten challenging optimization problem classes. Jump straight to any
+                class below, or browse the cards for a summary of how far each instance family has been solved.
+            </p>
+        </div>
+
+        <div class="jump-list" id="prob-jump"></div>
+
+        <div class="bar-legend">
+            <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-classical)"></span>Solved (optimal)</span>
+            <span class="legend-item"><span class="swatch" style="background:var(--bar-best-known-classical)"></span>Best known</span>
+            <span class="legend-item"><span class="swatch" style="background:var(--bar-open-classical)"></span>Open</span>
+            <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-quantum)"></span>Solved by quantum</span>
+        </div>
+
+        <div class="pgrid" id="pgrid">
+            <div class="loading">Loading problem data</div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span id="footer-build">Generated from the QOBLIB repository.</span>
+        <span><a href="data/index.json">Download site data</a></span>
+    </footer>
+
+    <script src="assets/common.js"></script>
+    <script src="assets/problems.js"></script>
+</body>
+</html>

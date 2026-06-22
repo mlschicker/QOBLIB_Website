@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>(function(){try{var t=localStorage.getItem("qoblib-theme");if(t!=="dark"&&t!=="light"){t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+    <title>QOBLIB - Instances</title>
+    <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-nav="instances">
+    <nav>
+        <div class="nav-inner">
+            <a class="logo" href="index.html"><em>Q</em>OBLIB</a>
+            <div class="nav-links">
+                <a class="nl" data-nav="home" href="index.html">Home</a>
+                <a class="nl" data-nav="problems" href="problems.html">Problems</a>
+                <a class="nl" data-nav="instances" href="instances.html">Instances</a>
+                <a class="nl" data-nav="submissions" href="submissions.html">Submissions</a>
+                <a class="nl" data-nav="leaderboard" href="leaderboard.html">Leaderboard</a>
+                <a class="nl" data-nav="submit" href="submit.html">Submit</a>
+            </div>
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="ph">
+            <h2>Instance Browser</h2>
+            <p>Click any instance name for details, or use the download link to access the raw file on GitHub.</p>
+        </div>
+
+        <section class="tw chart-card" id="mip-chart-card">
+            <div class="chart-head">
+                <div>
+                    <h3>MIP Instance Map</h3>
+                    <p>Each point is one instance from LP-based metrics. x-axis: number of variables, y-axis: density. Click a point to open the instance.</p>
+                </div>
+                <div class="chart-legend" id="mip-chart-legend"></div>
+            </div>
+            <div id="mip-chart" class="mip-chart-wrap">
+                <div class="loading">Loading MIP metrics</div>
+            </div>
+        </section>
+
+        <div class="filters">
+            <input type="text" class="fi-grow" id="i-search" placeholder="Search by name..." oninput="renderInstances()" />
+            <select id="i-prob" onchange="renderInstances()">
+                <option value="">All problem classes</option>
+            </select>
+            <select id="i-status" onchange="renderInstances()">
+                <option value="">All statuses</option>
+                <option value="optimal">Optimal</option>
+                <option value="best_known">Best known</option>
+                <option value="open">Open</option>
+            </select>
+            <select id="i-sort" onchange="renderInstances()">
+                <option value="name">Name</option>
+                <option value="best_asc">Best objective ↑</option>
+                <option value="best_desc">Best objective ↓</option>
+            </select>
+            <span class="fi-count" id="i-count"></span>
+            <button class="btn btn-ghost btn-sm" type="button" id="i-download" onclick="downloadInstancesCsv()">⬇ Download CSV</button>
+        </div>
+
+        <div class="tw" id="instances-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Instance</th>
+                        <th>Problem</th>
+                        <th data-no-sort="true">Parameters</th>
+                        <th style="text-align:right">Best objective</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th data-no-sort="true">Download</th>
+                    </tr>
+                </thead>
+                <tbody id="i-tbody">
+                    <tr><td colspan="7" class="loading">Loading instances</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span id="footer-build">Generated from the QOBLIB repository.</span>
+        <span><a href="data/index.json">Download site data</a></span>
+    </footer>
+
+    <script src="assets/common.js"></script>
+    <script src="assets/instances.js"></script>
+</body>
+</html>
