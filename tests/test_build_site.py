@@ -149,6 +149,21 @@ class BuildSiteTests(unittest.TestCase):
         self.assertTrue((out / "index.html").is_file())
         self.assertTrue((out / "data" / "index.json").is_file())
 
+    def test_full_site_build_refuses_static_source_output(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        make_fixture(root)
+        source_index = root / "website" / "index.html"
+
+        with self.assertRaises(SystemExit):
+            build_site(out=root / "website", root=root, built_at="2026-01-01T00:00:00Z")
+        self.assertTrue(source_index.is_file())
+
+        with self.assertRaises(SystemExit):
+            build_site(out=root / "website" / "_site", root=root, built_at="2026-01-01T00:00:00Z")
+        self.assertTrue(source_index.is_file())
+
     def test_data_only_build_cleans_generated_data_only(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

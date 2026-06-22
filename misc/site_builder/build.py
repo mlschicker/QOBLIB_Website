@@ -125,6 +125,7 @@ def _remove_path(path: Path) -> None:
 def _refuse_unsafe_output_dir(root: Path, out_dir: Path) -> None:
     root_resolved = root.resolve()
     out_resolved = out_dir.resolve()
+    website_source = (root_resolved / "website").resolve()
     unsafe = {
         Path(out_resolved.anchor),
         root_resolved,
@@ -135,6 +136,14 @@ def _refuse_unsafe_output_dir(root: Path, out_dir: Path) -> None:
     }
     if out_resolved in unsafe:
         raise SystemExit(f"Refusing to clean unsafe site output directory: {out_dir}")
+    try:
+        out_resolved.relative_to(website_source)
+    except ValueError:
+        pass
+    else:
+        raise SystemExit(
+            f"Refusing to clean static frontend source directory as site output: {out_dir}"
+        )
 
 
 def clean_site_output(root: Path, out_dir: Path, copy_static: bool) -> None:
