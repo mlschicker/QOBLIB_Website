@@ -1637,7 +1637,7 @@ td.num {
 
 /* ---- Community credit / participating organizations ---- */
 .community {
-    margin: -1.5rem 0 4rem;
+    margin: 0 0 3rem;
     padding: 0 0 2.6rem;
     border-bottom: 1px solid var(--border);
 }
@@ -1666,17 +1666,17 @@ td.num {
 
 .community-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.75rem;
 }
 
 .community-card {
     min-width: 0;
-    min-height: 116px;
+    min-height: 168px;
     display: grid;
-    grid-template-columns: 64px minmax(0, 1fr);
-    align-items: center;
-    gap: 0.85rem;
+    grid-template-rows: 72px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.75rem;
     padding: 0.95rem 1rem;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1691,8 +1691,9 @@ a.community-card:hover {
 }
 
 .community-logo {
-    width: 64px;
-    height: 48px;
+    min-width: 0;
+    width: 100%;
+    height: 72px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1701,9 +1702,12 @@ a.community-card:hover {
     border-radius: var(--r);
     color: var(--accent-d);
     font-family: var(--mono);
-    font-size: 0.78rem;
-    font-weight: 600;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
     letter-spacing: 0.04em;
+    line-height: 1.15;
+    text-align: center;
 }
 
 .community-logo img {
@@ -1715,6 +1719,7 @@ a.community-card:hover {
 
 .community-card-copy {
     display: grid;
+    align-content: start;
     gap: 0.18rem;
     min-width: 0;
 }
@@ -1787,7 +1792,7 @@ a.community-card:hover {
     }
 
     .community {
-        margin-top: -1.2rem;
+        margin-bottom: 2.5rem;
     }
 
     .community-head {
@@ -1801,15 +1806,14 @@ a.community-card:hover {
     }
 
     .community-card {
-        min-height: 96px;
-        grid-template-columns: 56px minmax(0, 1fr);
+        min-height: 148px;
+        grid-template-rows: 64px minmax(0, 1fr);
         padding: 0.85rem;
     }
 
     .community-logo {
-        width: 56px;
-        height: 42px;
-        font-size: 0.72rem;
+        height: 64px;
+        font-size: 0.82rem;
     }
 
     .site-footer {

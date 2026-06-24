@@ -13,6 +13,7 @@ const COMMUNITY_CONTRIBUTORS = [
     {
         name: "Zuse Institute Berlin",
         short: "ZIB",
+        mark: "ZIB",
         kind: "Institute",
         url: "https://www.zib.de",
         role: "Repository stewardship, benchmark maintenance, and website development.",
@@ -20,13 +21,15 @@ const COMMUNITY_CONTRIBUTORS = [
     {
         name: "IBM Quantum",
         short: "IBM",
+        mark: "IBM Quantum",
         kind: "Company",
         url: "https://www.ibm.com/quantum",
         role: "Initiated the Quantum Optimization Working Group effort with partners.",
     },
     {
         name: "Purdue Davidson School of Chemical Engineering",
-        short: "PChE",
+        short: "Purdue ChE",
+        mark: "Purdue ChE",
         kind: "University",
         url: "https://engineering.purdue.edu/ChE",
         role: "Academic contributor affiliation and benchmark community participation.",
@@ -34,12 +37,14 @@ const COMMUNITY_CONTRIBUTORS = [
     {
         name: "Quantum Optimization Working Group",
         short: "QOWG",
+        mark: "QOWG",
         kind: "Working group",
         role: "Core benchmark design, paper contributions, and community coordination.",
     },
     {
         name: "Community submitters",
         short: "PR",
+        mark: "Submitters",
         kind: "Submissions",
         url: "submissions.html",
         role: "Benchmark solutions, bounds, and performance records contributed by pull request.",
@@ -47,6 +52,7 @@ const COMMUNITY_CONTRIBUTORS = [
 ];
 
 function contributorInitials(entry) {
+    if (entry.mark) return entry.mark;
     if (entry.short) return entry.short;
     return String(entry.name || "")
         .split(/\s+/)
