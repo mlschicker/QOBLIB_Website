@@ -3,6 +3,7 @@
 A comprehensive benchmark suite for quantum optimization methods, featuring ten challenging problem classes with practical applications.
 
 [![arXiv](https://img.shields.io/badge/arXiv-2504.03832-b31b1b.svg)](https://arxiv.org/pdf/2504.03832)
+[![Nature Computational Science](https://img.shields.io/badge/Nature%20Computational%20Science-10.1038%2Fs43588--026--00991--1-1f1f1f.svg)](https://www.nature.com/articles/s43588-026-00991-1)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](LICENSE.data)
 
@@ -50,7 +51,8 @@ The problem classes vary in objective type, variable type, coefficient ranges, a
 
 ## Paper Reference
 
-**[Quantum Optimization Benchmark Library: The Intractable Decathlon](https://arxiv.org/pdf/2504.03832)**
+- **Nature Computational Science:** [The Quantum Optimization Benchmarking Library](https://www.nature.com/articles/s43588-026-00991-1)
+- **arXiv preprint:** [Quantum Optimization Benchmarking Library: The Intractable Decathlon](https://arxiv.org/abs/2504.03832)
 
 ## Problem Complexity Landscape
 
@@ -162,6 +164,18 @@ This project uses **dual licensing**:
 If you use QOBLIB in your research, please cite:
 
 ```bibtex
+@article{
+  koch2026quantumoptimizationbenchmarkinglibrary,
+  title={The Quantum Optimization Benchmarking Library},
+  author={Koch, Thorsten and Bernal Neira, David E. and Chen, Ying and others},
+  journal={Nature Computational Science},
+  volume={6},
+  pages={653--671},
+  year={2026},
+  doi={10.1038/s43588-026-00991-1},
+  url={https://www.nature.com/articles/s43588-026-00991-1},
+}
+
 @misc{
   koch2025quantumoptimizationbenchmarkinglibrary,
   title={Quantum Optimization Benchmarking Library - The Intractable Decathlon}, 
