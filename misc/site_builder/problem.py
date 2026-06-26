@@ -356,16 +356,27 @@ def build_problem(problem_id: str, problem_dir: Path) -> dict:
             break
     readme_intro_md = extract_problem_intro(readme_text)
 
-    csv_subs = read_csv_submissions_folder(submissions_dir)
+    # The real instance names let the submission reader rescue rows whose
+    # "Problem" column holds a label rather than the instance id (see
+    # _resolve_instance); their path encodes the true instance.
+    known_instances = set(bkv_map) | set(model_map)
+    csv_subs = read_csv_submissions_folder(submissions_dir, known_instances)
 
     instances = _collect_instances(problem_id, problem_dir, bkv_map, model_map, csv_subs)
 
     # Attach problem-specific metric columns (nodes/edges, assets/periods, ...).
     attach_instance_metrics(problem_id, problem_dir, instances)
 
-    solved_hw, solved_sim, _solved_classical = _resolve_best_values(
+    solved_hw, solved_sim, solved_classical_sub = _resolve_best_values(
         problem_dir, meta, instances, bkv_map, csv_subs
     )
+
+    # Per-instance "reached the optimum with a quantum submission" flag, mirroring
+    # the quantum progress bar. Consumed by the home-page landscape scatter
+    # (landscape.py via build.py); stripped before instances.json is written.
+    quantum_optimal_names = solved_hw | solved_sim
+    for inst in instances:
+        inst["quantum_optimal"] = inst.get("name") in quantum_optimal_names
 
     # Collect all submissions as leaderboard-format entries.
     submissions: list[dict] = []
@@ -389,6 +400,22 @@ def build_problem(problem_id: str, problem_dir: Path) -> dict:
     n_solved = sum(1 for i in instances if i.get("status") in ("optimal", "solved"))
     n_best_known = sum(1 for i in instances if i.get("status") == "best_known")
     n_open = sum(1 for i in instances if i.get("status") == "open")
+    # Classically-solved = optimal instances whose proven optimum came from a
+    # classical method: either the repository's (classical) reference solution or
+    # a classical submission that reached it. This is the counterpart to
+    # quantum_solved_count and powers the "Classical" progress bar — unlike the
+    # method-agnostic solved_count, it excludes instances proven optimal only by a
+    # quantum submission.
+    n_classical_solved = sum(
+        1
+        for i in instances
+        if i.get("status") in ("optimal", "solved")
+        and (
+            i.get("name") in solved_classical_sub
+            or i.get("reference_solution_url")
+            or isinstance(i.get("reference_solution_value"), (int, float))
+        )
+    )
     n_quantum_solved = len(solved_hw | solved_sim)
     n_quantum_hw_solved = len(solved_hw)
     n_quantum_sim_solved = len(solved_sim)
@@ -412,6 +439,7 @@ def build_problem(problem_id: str, problem_dir: Path) -> dict:
         "vars_max": max(vars_list) if vars_list else None,
         "instance_count": len(instances),
         "solved_count": n_solved,
+        "solved_classical_count": n_classical_solved,
         "best_known_count": n_best_known,
         "open_count": n_open,
         "quantum_solved_count": n_quantum_solved,

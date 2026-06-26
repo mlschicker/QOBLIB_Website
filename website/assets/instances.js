@@ -4,12 +4,11 @@ const {
     esc: qEsc,
     fmtBytes: qFmtBytes,
     fmtNum: qFmtNum,
-    loadIndex: qLoadIndex,
-    loadProblemData: qLoadProblemData,
+    loadInstancesList: qLoadInstancesList,
+    enhanceFigures: qEnhanceFigures,
     instanceUrl: qInstanceUrl,
     problemUrl: qProblemUrl,
     statusPill: qStatusPill,
-    modelLinks: qModelLinks,
     showError: qShowError,
     initCommon: qInitCommon,
     downloadCsv: qDownloadCsv,
@@ -33,6 +32,50 @@ const PROBLEM_COLORS = {
 
 function colorForProblem(problemId) {
     return PROBLEM_COLORS[String(problemId || "").padStart(2, "0")] || { fill: "#1f6f6c", stroke: "#0e4f4d" };
+}
+
+// Approaches of the same problem share the base hue but get progressively
+// lightened/darkened shades, so overlapping scatter points (and their legend
+// dots) for different model formulations of one problem stay distinguishable.
+const SHADE_STEPS = [26, -22, 50, -44];
+
+function shadeHex(hex, percent) {
+    const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
+    if (!m || !percent) return hex;
+    const n = parseInt(m[1], 16);
+    const target = percent < 0 ? 0 : 255;
+    const p = Math.abs(percent) / 100;
+    const mix = (c) => Math.round((target - c) * p) + c;
+    const r = mix((n >> 16) & 255);
+    const g = mix((n >> 8) & 255);
+    const b = mix(n & 255);
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+let MODEL_COLORS = new Map(); // model key -> { fill, stroke }
+
+function buildModelColors(points) {
+    const byProblem = new Map(); // pid -> ordered unique model keys
+    points.forEach((point) => {
+        const pid = String(point.problem_id || "").padStart(2, "0");
+        const key = modelKeyForPoint(point);
+        if (!byProblem.has(pid)) byProblem.set(pid, []);
+        const list = byProblem.get(pid);
+        if (!list.includes(key)) list.push(key);
+    });
+    MODEL_COLORS = new Map();
+    byProblem.forEach((keys, pid) => {
+        const base = colorForProblem(pid);
+        keys.sort((a, b) => a.localeCompare(b));
+        keys.forEach((key, i) => {
+            const amt = i === 0 ? 0 : SHADE_STEPS[(i - 1) % SHADE_STEPS.length];
+            MODEL_COLORS.set(key, { fill: shadeHex(base.fill, amt), stroke: shadeHex(base.stroke, amt) });
+        });
+    });
+}
+
+function colorForModelKey(key, problemId) {
+    return MODEL_COLORS.get(key) || colorForProblem(problemId);
 }
 
 function prettyModelLabel(label) {
@@ -72,7 +115,7 @@ function renderProblemLegend(points) {
     legendRoot.innerHTML = keys
         .map((key) => {
             const meta = classInfo.get(key) || {};
-            const color = colorForProblem(meta.pid);
+            const color = colorForModelKey(key, meta.pid);
             const active = visibleMipModels.has(key);
             return `
                 <button type="button" class="legend-item${active ? " on" : " off"}" data-model-key="${qEsc(key)}" aria-pressed="${active ? "true" : "false"}">
@@ -121,77 +164,6 @@ function updateMipPointVisibility() {
     });
 }
 
-function normalizePortfolioLambda(name) {
-    return String(name || "")
-        .replaceAll("_l0.000001", "_l1e-06")
-        .replaceAll("_l0.00001", "_l1e-05")
-        .replaceAll("_l0.00005", "_l5e-05")
-        .replace(/_l0$/, "_l0.0");
-}
-
-function modelStemFromName(name) {
-    const base = String(name || "").replace(/\.(xz|gz|bz2)$/i, "").replace(/\.(lp|mps)$/i, "");
-    return normalizePortfolioLambda(base.replace(/^bqp_/, "").replace(/^uqo_/, ""));
-}
-
-function metricsUrlFromModelUrl(modelUrl) {
-    try {
-        const url = new URL(modelUrl, window.location.href);
-        const parts = url.pathname.split("/").filter(Boolean);
-        const metricDirIdx = parts.findIndex((part) => part === "lp_files" || part === "qs_files");
-        if (metricDirIdx >= 0) {
-            url.pathname = `/${parts.slice(0, metricDirIdx + 1).join("/")}/metrics.csv`;
-            return url.toString();
-        }
-        url.pathname = `/${parts.slice(0, -1).join("/")}/metrics.csv`;
-        return url.toString();
-    } catch {
-        return String(modelUrl || "").replace(/\/[^/]+$/, "/metrics.csv");
-    }
-}
-
-function csvToRows(text) {
-    const lines = String(text || "")
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-    if (!lines.length) return [];
-
-    const parseLine = (line) => {
-        const cells = [];
-        let cur = "";
-        let quoted = false;
-        for (let i = 0; i < line.length; i += 1) {
-            const ch = line[i];
-            if (ch === '"') {
-                if (quoted && line[i + 1] === '"') {
-                    cur += '"';
-                    i += 1;
-                } else {
-                    quoted = !quoted;
-                }
-            } else if (ch === "," && !quoted) {
-                cells.push(cur);
-                cur = "";
-            } else {
-                cur += ch;
-            }
-        }
-        cells.push(cur);
-        return cells;
-    };
-
-    const header = parseLine(lines[0]).map((h) => h.trim());
-    return lines.slice(1).map((line) => {
-        const cells = parseLine(line);
-        const row = {};
-        header.forEach((h, idx) => {
-            row[h] = (cells[idx] || "").trim();
-        });
-        return row;
-    });
-}
-
 function formatDensity(v) {
     if (!Number.isFinite(v)) return "-";
     if (v === 0) return "0";
@@ -199,83 +171,12 @@ function formatDensity(v) {
     return v.toLocaleString(undefined, { maximumSignificantDigits: 5 });
 }
 
-async function loadMetricsMaps(instances) {
-    const metricsUrls = new Set();
-    instances.forEach((inst) => {
-        (inst.models || [])
-            .filter((m) => m.kind === "lp" && typeof m.raw_url === "string")
-            .forEach((m) => {
-                const csvUrl = metricsUrlFromModelUrl(m.raw_url);
-                metricsUrls.add(csvUrl);
-            });
-    });
-
-    const entries = await Promise.all(
-        [...metricsUrls].map(async (url) => {
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const rows = csvToRows(await response.text());
-                const metricsByStem = new Map();
-                rows.forEach((row) => {
-                    const fileCell = row.file || "";
-                    const stem = modelStemFromName(fileCell);
-                    const numVars = Number(row.num_vars);
-                    const density = Number(row.density);
-                    if (!stem || !Number.isFinite(numVars) || !Number.isFinite(density)) return;
-                    metricsByStem.set(stem, {
-                        num_vars: numVars,
-                        density,
-                    });
-                });
-                return [url, metricsByStem];
-            } catch {
-                return [url, new Map()];
-            }
-        }),
-    );
-    return new Map(entries);
-}
-
-async function buildMipPoints(instances) {
-    const metricsMaps = await loadMetricsMaps(instances);
-    const points = [];
-
-    instances.forEach((inst) => {
-        (inst.models || [])
-            .filter((m) => m.kind === "lp" && m.raw_url)
-            .forEach((model, modelIndex) => {
-                const csvUrl = metricsUrlFromModelUrl(model.raw_url);
-                const rowMap = metricsMaps.get(csvUrl);
-                if (!rowMap) return;
-
-                const stem = modelStemFromName(model.name || model.raw_url.split("/").pop() || "");
-                const metric = rowMap.get(stem);
-                if (!metric) return;
-
-                points.push({
-                    problem_id: inst.problem_id,
-                    problem_name: inst.problem_name,
-                    name: inst.name,
-                    num_vars: metric.num_vars,
-                    density: metric.density,
-                    model_approach: model.approach || model.kind || "model",
-                    model_kind: model.kind || "model",
-                    model_label: model.name || stem,
-                    model_index: modelIndex,
-                    model_key: `${String(inst.problem_id || "").padStart(2, "0")}::${String(model.approach || model.kind || "model")}`,
-                });
-            });
-    });
-
-    return points;
-}
-
 function renderMipChart(points) {
     const root = document.getElementById("mip-chart");
     if (!root) return;
 
     const positivePoints = points.filter((p) => p.num_vars > 0 && p.density > 0);
+    buildModelColors(positivePoints);
     visibleMipModels = new Set([...new Set(positivePoints.map((p) => p.model_key).filter(Boolean))]);
     renderProblemLegend(positivePoints);
 
@@ -346,7 +247,7 @@ function renderMipChart(points) {
     const circles = positivePoints
         .map((p, idx) => {
             const href = qInstanceUrl(p.problem_id, p.name);
-            const color = colorForProblem(p.problem_id);
+            const color = colorForModelKey(modelKeyForPoint(p), p.problem_id);
             return `
                 <circle
                     class="mip-point"
@@ -426,16 +327,20 @@ function renderMipChart(points) {
 async function initInstancesPage() {
     qInitCommon();
     try {
-        const idx = await qLoadIndex();
+        // One aggregated, trimmed request (data/instances.json) backs the whole
+        // page — instance rows, the per-problem column metadata, and the MIP
+        // scatter points — instead of fetching 1 + 2×N per-problem files.
+        const agg = await qLoadInstancesList();
+        const problems = agg.problems || [];
+
         const filter = document.getElementById("i-prob");
-        (idx.problems || []).forEach((p) => {
+        problems.forEach((p) => {
             const o = document.createElement("option");
             o.value = p.id;
             o.textContent = `${String(p.id).padStart(2, "0")} - ${p.name}`;
             filter.appendChild(o);
         });
 
-        const problems = await Promise.all((idx.problems || []).map((p) => qLoadProblemData(p.id)));
         allInstances = problems.flatMap((p) => {
             const cols = Array.isArray(p.columns) ? p.columns : [];
             return (p.instances || []).map((inst) => ({
@@ -453,8 +358,10 @@ async function initInstancesPage() {
             }));
         });
 
-        const mipPoints = await buildMipPoints(allInstances);
-        renderMipChart(mipPoints);
+        // Scatter points are pre-baked per problem at build time (see metrics.py)
+        // and carried in the same aggregate.
+        renderMipChart(problems.flatMap((p) => p.points || []));
+        qEnhanceFigures(document); // expand affordance on the MIP instance map
 
         renderInstances();
     } catch (error) {
@@ -467,7 +374,6 @@ function getFilteredInstances() {
     const q = (document.getElementById("i-search").value || "").toLowerCase();
     const pid = document.getElementById("i-prob").value || "";
     const st = document.getElementById("i-status").value || "";
-    const srt = document.getElementById("i-sort").value || "name";
 
     let rows = allInstances.filter(
         (r) =>
@@ -476,9 +382,7 @@ function getFilteredInstances() {
             (!st || r.status === st),
     );
 
-    if (srt === "best_asc") rows.sort((a, b) => (a.best_value ?? a.bkv ?? Number.POSITIVE_INFINITY) - (b.best_value ?? b.bkv ?? Number.POSITIVE_INFINITY));
-    else if (srt === "best_desc") rows.sort((a, b) => (b.best_value ?? b.bkv ?? Number.NEGATIVE_INFINITY) - (a.best_value ?? a.bkv ?? Number.NEGATIVE_INFINITY));
-    else rows.sort((a, b) => a.name.localeCompare(b.name));
+    rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     return rows;
 }
@@ -515,13 +419,17 @@ function renderInstances() {
                     <td><a class="rlink mono" href="${qInstanceUrl(r.problem_id, r.name)}">${qEsc(r.name)}</a></td>
                     <td><a class="badge b-type" href="${qProblemUrl(r.problem_id)}">${String(r.problem_id).padStart(2, "0")} ${qEsc(r.problem_name)}</a></td>
                     <td class="notes-cell" title="${r.metrics_text || ""}">${r.metrics_text || "-"}</td>
-                    <td class="num">${r.best_is_optimal ? `<strong>${qFmtNum(r.best_value ?? r.bkv)}</strong>` : qFmtNum(r.best_value ?? r.bkv)}</td>
-                    <td>${r.best_source_url ? `<a class="dl" href="${qEsc(r.best_source_url)}" target="_blank">${qEsc(r.best_source_label || r.best_source_type || "source")}</a>` : "-"}</td>
+                    <td class="num">${(() => { const v = qFmtNum(r.best_value ?? r.bkv); return r.best_is_optimal && v !== "-" ? `<strong>${v}</strong>` : v; })()}</td>
+                    <td>${r.best_source_url ? `<a class="dl" href="${qEsc(r.best_source_url)}" target="_blank" rel="noopener">${qEsc(r.best_source_label || r.best_source_type || "source")}</a>` : "-"}</td>
                     <td>${qStatusPill(r.status)}</td>
-                    <td><a class="dl" href="${qEsc(r.raw_url)}" target="_blank">↓ raw</a>${r.models?.length ? ` ${qModelLinks(r.models)}` : ""}</td>
+                    <td>${r.raw_url ? `<a class="dl" href="${qEsc(r.raw_url)}" target="_blank" rel="noopener">↓ raw</a>` : "-"}</td>
                 </tr>`,
             )
             .join("") || '<tr><td colspan="7" class="text-center padded">No instances match the current filters.</td></tr>';
+
+    // Re-apply the user's column sort to the freshly rendered rows so filtering or
+    // searching doesn't silently snap the table back to the default name order.
+    document.querySelector("#instances-table table")?.reapplySort?.();
 }
 
 window.renderInstances = renderInstances;

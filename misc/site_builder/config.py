@@ -29,6 +29,10 @@ from urllib.parse import urlsplit
 
 DEFAULT_REPO_URL = "https://github.com/ZIB-AOPT/QOBLIB"
 DEFAULT_REF = "main"
+# Deployed origin (no trailing slash) used to build absolute canonical / Open
+# Graph URLs and the <base> path for the pretty per-problem pages. Override with
+# `--base-url` for a custom domain.
+DEFAULT_BASE_URL = "https://zib-aopt.github.io/QOBLIB"
 
 PROBLEM_DIR_PATTERN = re.compile(r"^(\d{2})-(.+)$")
 

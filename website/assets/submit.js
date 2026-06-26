@@ -2,6 +2,7 @@
 
 const {
     esc: qEsc,
+    fmtDate: qFmtDate,
     loadIndex: qLoadIndex,
     loadProblemData: qLoadProblemData,
     showError: qShowError,
@@ -35,7 +36,7 @@ const SHARED_FIELDS = [
     { col: "Reference", label: "Reference (paper / repo URL)", placeholder: "https://arxiv.org/abs/..." },
     { col: "Modeling Approach", label: "Modeling approach", required: true, placeholder: "QUBO, ILP, ..." },
     { col: "Coefficients Type", label: "Coefficients type", required: true, placeholder: "integer / continuous" },
-    { col: "Algorithm Type", label: "Algorithm type", required: true, type: "select", options: ["", "deterministic", "stochastic"] },
+    { col: "Algorithm Type", label: "Algorithm type", required: true, type: "select", options: ["", "Deterministic", "Stochastic"] },
     { col: "Workflow", label: "Workflow", required: true, type: "textarea", placeholder: "pre-processing → solver → post-processing" },
     { col: "Hardware Specifications", label: "Hardware specifications", required: true, type: "textarea", placeholder: "IBM Eagle r3 (127 qubits); 1× A100; ..." },
     { col: "__team", label: "Team / folder tag", placeholder: "MyTeam — used in the submission folder name" },
@@ -44,7 +45,7 @@ const SHARED_FIELDS = [
 // Per-instance fields (CSV column -> input spec). "essential" ones are always visible.
 // All fields are required; numeric ones accept "N/A" when they do not apply.
 const ROW_FIELDS = [
-    { col: "Best Objective Value", label: "Best objective value", essential: true, required: true, placeholder: "-1234.5" },
+    { col: "Best Objective Value", label: "Best objective value", essential: true, required: true, placeholder: "-1234.5 (or N/A for feasibility problems)" },
     { col: "Optimality Bound", label: "Optimality bound", required: true, placeholder: "number or N/A" },
     { col: "# Decision Variables", label: "# Decision vars", required: true, placeholder: "number or N/A" },
     { col: "# Binary Variables", label: "# Binary vars", required: true, placeholder: "number or N/A" },
@@ -61,7 +62,9 @@ const ROW_FIELDS = [
     { col: "GPU Runtime", label: "GPU runtime (s)", required: true, placeholder: "seconds or N/A" },
     { col: "QPU Runtime", label: "QPU runtime (s)", required: true, placeholder: "seconds or N/A" },
     { col: "Other HW Runtime", label: "Other HW runtime (s)", required: true, placeholder: "seconds or N/A" },
-    { col: "Remarks", label: "Remarks", required: true, type: "textarea", placeholder: "notes, or N/A — negative results welcome!" },
+    // Free-text notes: the authoritative checker never requires a value here, so
+    // don't force the user to type "N/A" into a notes field — leave it optional.
+    { col: "Remarks", label: "Remarks", required: false, type: "textarea", placeholder: "notes — negative results welcome!" },
 ];
 
 let SITE_INDEX = null;
@@ -70,6 +73,7 @@ const INSTANCE_INDEX = new Map();         // instance name -> problem id (best e
 let rowSeq = 0;
 let validated = false;                     // becomes true after "Check submission" / export
 const shared = {};                        // shared field values
+const sharedTouched = new Set();          // shared cols the user edited by hand (import won't clobber these)
 
 const NA = (v) => String(v || "").trim().toUpperCase();
 const isNA = (v) => NA(v) === "N/A" || NA(v) === "NA";
@@ -77,8 +81,11 @@ const isBlank = (v) => String(v ?? "").trim() === "";
 
 function showToast(msg, type = "success") {
     const t = document.getElementById("toast");
+    if (!t) return;
     t.textContent = msg;
     t.style.background = type === "error" ? "var(--red)" : type === "warn" ? "var(--amber)" : "var(--green)";
+    // Errors/warnings interrupt; success is announced politely.
+    t.setAttribute("aria-live", type === "error" || type === "warn" ? "assertive" : "polite");
     t.classList.add("show");
     setTimeout(() => t.classList.remove("show"), 2800);
 }
@@ -106,6 +113,11 @@ async function getProblem(id) {
 // Rendering
 // ---------------------------------------------------------------------------
 
+// Stable, unique DOM id for a field so its <label for> can point at the input.
+function colId(prefix, col) {
+    return `${prefix}-${String(col).replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()}`;
+}
+
 function fieldInput(spec, value, oninput, idAttr) {
     const id = idAttr ? `id="${idAttr}"` : "";
     const ph = spec.placeholder ? `placeholder="${qEsc(spec.placeholder)}"` : "";
@@ -113,7 +125,10 @@ function fieldInput(spec, value, oninput, idAttr) {
         return `<textarea ${id} data-col="${qEsc(spec.col)}" ${ph} oninput="${oninput}">${qEsc(value || "")}</textarea>`;
     }
     if (spec.type === "select") {
-        const opts = (spec.options || []).map((o) => `<option value="${qEsc(o)}"${o === value ? " selected" : ""}>${qEsc(o || "—")}</option>`).join("");
+        // Case-insensitive match so an imported value (e.g. "Deterministic") still
+        // selects its option even if the casing differs from the option list.
+        const valLower = String(value ?? "").toLowerCase();
+        const opts = (spec.options || []).map((o) => `<option value="${qEsc(o)}"${String(o).toLowerCase() === valLower ? " selected" : ""}>${qEsc(o || "—")}</option>`).join("");
         return `<select ${id} data-col="${qEsc(spec.col)}" onchange="${oninput}">${opts}</select>`;
     }
     const type = spec.type === "date" ? "date" : "text";
@@ -124,9 +139,10 @@ function renderShared() {
     const grid = document.getElementById("shared-grid");
     grid.innerHTML = SHARED_FIELDS.map((f) => {
         const full = f.type === "textarea" ? " ff-full" : "";
+        const id = colId("sf", f.col);
         return `<div class="ff${full}">
-            <label>${qEsc(f.label)}${f.required ? "" : ' <span class="opt">(optional)</span>'}</label>
-            ${fieldInput(f, shared[f.col] || "", "onSharedInput(this)")}
+            <label for="${id}">${qEsc(f.label)}${f.required ? "" : ' <span class="opt">(optional)</span>'}</label>
+            ${fieldInput(f, shared[f.col] || "", "onSharedInput(this)", id)}
         </div>`;
     }).join("");
 }
@@ -141,17 +157,15 @@ function problemOptions(selected) {
 }
 
 function rowTemplate(row) {
-    const advanced = ROW_FIELDS.filter((f) => !f.essential)
-        .map((f) => `<div class="ff">
-            <label>${qEsc(f.label)}${f.required ? "" : ' <span class="opt">(optional)</span>'}</label>
-            ${fieldInput(f, row.data[f.col] || "", `onRowInput(${row.id}, this)`)}
-        </div>`).join("");
-
-    const essential = ROW_FIELDS.filter((f) => f.essential)
-        .map((f) => `<div class="ff">
-            <label>${qEsc(f.label)}${f.required ? "" : ' <span class="opt">(optional)</span>'}</label>
-            ${fieldInput(f, row.data[f.col] || "", `onRowInput(${row.id}, this)`)}
-        </div>`).join("");
+    const fieldBlock = (f) => {
+        const id = colId(`rf${row.id}`, f.col);
+        return `<div class="ff">
+            <label for="${id}">${qEsc(f.label)}${f.required ? "" : ' <span class="opt">(optional)</span>'}</label>
+            ${fieldInput(f, row.data[f.col] || "", `onRowInput(${row.id}, this)`, id)}
+        </div>`;
+    };
+    const advanced = ROW_FIELDS.filter((f) => !f.essential).map(fieldBlock).join("");
+    const essential = ROW_FIELDS.filter((f) => f.essential).map(fieldBlock).join("");
 
     return `
     <div class="srow" id="srow-${row.id}" data-rid="${row.id}">
@@ -161,19 +175,24 @@ function rowTemplate(row) {
         </div>
         <div class="srow-head">
             <div class="ff">
-                <label>Problem</label>
-                <select data-role="problem" onchange="onProblemChange(${row.id}, this)">${problemOptions(row.problemId)}</select>
+                <label for="prob-${row.id}">Problem class</label>
+                <select id="prob-${row.id}" data-role="problem" onchange="onProblemChange(${row.id}, this)">${problemOptions(row.problemId)}</select>
             </div>
             <div class="ff fi-grow">
-                <label>Instance</label>
-                <input data-role="instance" list="dl-${row.id}" value="${qEsc(row.instance || "")}" placeholder="start typing an instance name…" oninput="onInstanceInput(${row.id}, this)" />
-                <datalist id="dl-${row.id}"></datalist>
+                <label for="inst-${row.id}">Instance</label>
+                <div class="ac" data-rid="${row.id}">
+                    <input id="inst-${row.id}" type="text" data-role="instance" autocomplete="off"
+                           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="acm-${row.id}"
+                           value="${qEsc(row.instance || "")}" placeholder="start typing an instance name…"
+                           oninput="onInstanceInput(${row.id}, this)" />
+                    <ul class="ac-menu" id="acm-${row.id}" role="listbox" hidden></ul>
+                </div>
             </div>
             ${essential}
         </div>
         <div class="srow-status" id="srow-status-${row.id}"></div>
         <details class="srow-adv" open>
-            <summary>Model &amp; runtime details — all required (use N/A if not applicable)</summary>
+            <summary>Model &amp; runtime details — enter N/A for any numeric field that does not apply</summary>
             <div class="field-grid">${advanced}</div>
         </details>
     </div>`;
@@ -186,7 +205,7 @@ function renderRows() {
     rows.forEach((r, i) => (r.idx = i + 1));
     host.innerHTML = rows.map(rowTemplate).join("");
     rows.forEach((r) => {
-        if (r.problemId) refreshDatalist(r);
+        if (r.problemId) loadRowInstances(r);
     });
     validateAll();
 }
@@ -215,32 +234,176 @@ function removeRow(id) {
     if (i < 0) return;
     const row = rows[i];
 
-    // Only nag about deletion when the row actually contains entered data —
-    // an empty row is removed immediately. Otherwise confirm twice.
+    // Only confirm when the row actually contains entered data — an empty row is
+    // removed immediately. A single confirm is enough.
     if (rowHasData(row)) {
         const label = !isBlank(row.instance) ? `“${row.instance}”` : `#${row.idx}`;
-        if (!window.confirm(`Row ${label} contains information you entered.\n\nDelete this row?`)) return;
-        if (!window.confirm("Are you sure? This permanently removes the row and everything you typed into it.")) return;
+        if (!window.confirm(`Delete row ${label}? This permanently removes everything you typed into it.`)) return;
     }
 
     rows.splice(i, 1);
     renderRows();
 }
 
-async function refreshDatalist(row) {
-    if (!row.problemId) return;
-    const dl = document.getElementById(`dl-${row.id}`);
-    if (!dl) return;
-    try {
-        const p = await getProblem(row.problemId);
-        dl.innerHTML = (p.instances || [])
-            .slice(0, 2000)
-            .map((i) => `<option value="${qEsc(i.name)}"></option>`)
-            .join("");
-    } catch {
-        /* ignore */
+// Cache the chosen problem's instance names on the row; the custom autocomplete
+// (below) filters this list as the user types. Refresh an open menu in case the
+// problem changed while the field was focused.
+async function loadRowInstances(row) {
+    if (!row.problemId) {
+        row._instanceNames = [];
+    } else {
+        try {
+            const p = await getProblem(row.problemId);
+            row._instanceNames = (p.instances || []).map((i) => i.name).filter(Boolean);
+        } catch {
+            row._instanceNames = [];
+        }
+    }
+    if (acMenu(row.id) && !acMenu(row.id).hidden) renderAc(row);
+    validateAll();
+}
+
+// ---------------------------------------------------------------------------
+// Instance autocomplete — a themed replacement for the native <datalist>, which
+// renders with un-styleable OS chrome that clashes with the rest of the form.
+// ---------------------------------------------------------------------------
+const AC_MAX = 60; // cap rendered suggestions; "N more…" hints at the rest
+
+const acMenu = (rowId) => document.getElementById(`acm-${rowId}`);
+const acInput = (rowId) => document.getElementById(`inst-${rowId}`);
+const acItems = (rowId) => {
+    const m = acMenu(rowId);
+    return m ? Array.from(m.querySelectorAll(".ac-item")) : [];
+};
+
+function closeAc(rowId) {
+    const menu = acMenu(rowId);
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    menu.innerHTML = "";
+    menu.dataset.active = "-1";
+    acInput(rowId)?.setAttribute("aria-expanded", "false");
+}
+
+function closeAllAc(except) {
+    document.querySelectorAll("#rows .ac-menu:not([hidden])").forEach((m) => {
+        const rid = m.id.replace("acm-", "");
+        if (rid !== String(except)) closeAc(rid);
+    });
+}
+
+function renderAc(row) {
+    const menu = acMenu(row.id);
+    const input = acInput(row.id);
+    if (!menu || !input) return;
+    const names = row._instanceNames || [];
+    const q = String(row.instance || "").trim().toLowerCase();
+    let matches = q ? names.filter((n) => n.toLowerCase().includes(q)) : names;
+    // Already an exact pick — nothing useful to offer.
+    if (matches.length === 1 && matches[0].toLowerCase() === q) matches = [];
+    const shown = matches.slice(0, AC_MAX);
+    if (!shown.length) {
+        closeAc(row.id);
+        return;
+    }
+    const extra = matches.length - shown.length;
+    menu.innerHTML =
+        shown
+            .map((n) => `<li role="option" class="ac-item" data-rid="${row.id}" data-name="${qEsc(n)}">${qEsc(n)}</li>`)
+            .join("") +
+        (extra > 0 ? `<li class="ac-more" aria-hidden="true">${extra} more — keep typing to narrow…</li>` : "");
+    menu.hidden = false;
+    menu.dataset.active = "-1";
+    input.setAttribute("aria-expanded", "true");
+}
+
+function setAcActive(rowId, idx) {
+    const items = acItems(rowId);
+    if (!items.length) return;
+    const n = items.length;
+    const at = ((idx % n) + n) % n;
+    items.forEach((it, i) => it.classList.toggle("active", i === at));
+    const menu = acMenu(rowId);
+    if (menu) menu.dataset.active = String(at);
+    const input = acInput(rowId);
+    if (input) input.setAttribute("aria-activedescendant", items[at].id || "");
+    items[at].scrollIntoView({ block: "nearest" });
+}
+
+function chooseAc(row, name) {
+    setRowInstance(row, name);
+    const input = acInput(row.id);
+    if (input) input.value = name;
+    closeAc(row.id);
+}
+
+// Shared by typing and by picking a suggestion.
+function setRowInstance(row, value) {
+    row.instance = value;
+    // Auto-detect the problem if it is unambiguous and not set yet.
+    if (!row.problemId && INSTANCE_INDEX.has(value)) {
+        row.problemId = INSTANCE_INDEX.get(value);
+        const sel = document.querySelector(`#srow-${row.id} select[data-role="problem"]`);
+        if (sel) sel.value = row.problemId;
+        loadRowInstances(row);
     }
     validateAll();
+}
+
+const rowForEvent = (target) => {
+    const input = target.closest?.('[data-role="instance"]');
+    if (!input || !input.closest(".ac")) return null;
+    const row = rows.find((r) => String(r.id) === input.id.replace("inst-", ""));
+    return row ? { row, input } : null;
+};
+
+function onRowsFocusin(e) {
+    const ctx = rowForEvent(e.target);
+    if (ctx) renderAc(ctx.row);
+}
+
+function onRowsMousedown(e) {
+    const item = e.target.closest?.(".ac-item");
+    if (!item) return;
+    e.preventDefault(); // keep focus in the input so it doesn't blur-close first
+    const row = rows.find((r) => String(r.id) === item.dataset.rid);
+    if (row) chooseAc(row, item.dataset.name);
+}
+
+function onRowsKeydown(e) {
+    const ctx = rowForEvent(e.target);
+    if (!ctx) return;
+    const { row } = ctx;
+    const menu = acMenu(row.id);
+    const open = menu && !menu.hidden;
+    if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!open) renderAc(row);
+        setAcActive(row.id, Number(menu?.dataset.active ?? -1) + 1);
+    } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (open) setAcActive(row.id, Number(menu.dataset.active ?? 0) - 1);
+    } else if (e.key === "Enter") {
+        const active = open ? Number(menu.dataset.active) : -1;
+        if (active >= 0) {
+            e.preventDefault();
+            const it = acItems(row.id)[active];
+            if (it) chooseAc(row, it.dataset.name);
+        }
+    } else if (e.key === "Escape") {
+        if (open) {
+            e.preventDefault();
+            closeAc(row.id);
+        }
+    }
+}
+
+function onRowsFocusout(e) {
+    const ctx = rowForEvent(e.target);
+    if (!ctx) return;
+    // Close unless focus moved within the same autocomplete (mousedown selection).
+    const ac = ctx.input.closest(".ac");
+    if (!ac.contains(e.relatedTarget)) closeAc(ctx.row.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -249,6 +412,7 @@ async function refreshDatalist(row) {
 
 function onSharedInput(el) {
     shared[el.dataset.col] = el.value;
+    sharedTouched.add(el.dataset.col);
     validateAll();
 }
 
@@ -263,20 +427,14 @@ function onProblemChange(id, el) {
     const row = rows.find((r) => r.id === id);
     if (!row) return;
     row.problemId = el.value;
-    refreshDatalist(row);
+    loadRowInstances(row);
 }
 
 function onInstanceInput(id, el) {
     const row = rows.find((r) => r.id === id);
     if (!row) return;
-    row.instance = el.value;
-    // Auto-detect the problem if it is unambiguous and not set yet.
-    if (!row.problemId && INSTANCE_INDEX.has(el.value)) {
-        row.problemId = INSTANCE_INDEX.get(el.value);
-        const sel = document.querySelector(`#srow-${id} select[data-role="problem"]`);
-        if (sel) sel.value = row.problemId;
-    }
-    validateAll();
+    setRowInstance(row, el.value);
+    renderAc(row);
 }
 
 // ---------------------------------------------------------------------------
@@ -324,9 +482,14 @@ function validateRow(row) {
         } else {
             const valRaw = row.data["Best Objective Value"];
             if (isBlank(valRaw)) {
-                out.errors.push("Best objective value is required.");
+                out.errors.push("Best objective value is required (enter a value or N/A).");
+            } else if (isNA(valRaw)) {
+                // Feasibility problems (e.g. Market Split) have no objective to
+                // optimise, so N/A is valid here — it is what the authoritative
+                // checker accepts. There is nothing to cross-check against an optimum.
+                out.oks.push("Objective reported as N/A (no value to cross-check).");
             } else if (!Number.isFinite(Number(String(valRaw).replace(/,/g, "")))) {
-                out.errors.push(`Best objective value must be a number (got “${valRaw}”).`);
+                out.errors.push(`Best objective value must be a number or N/A (got “${valRaw}”).`);
             } else {
                 const v = Number(String(valRaw).replace(/,/g, ""));
                 const minimize = problem.minimize !== false;
@@ -366,8 +529,20 @@ function validateRow(row) {
     return out;
 }
 
+// Toggle the visual invalid state and the matching aria-invalid so the failure
+// is conveyed to assistive tech, not just by colour.
+function markInvalid(el, bad) {
+    if (!el) return;
+    el.classList.toggle("invalid", Boolean(bad));
+    if (bad) el.setAttribute("aria-invalid", "true");
+    else el.removeAttribute("aria-invalid");
+}
+
 function clearInvalidMarks() {
-    document.querySelectorAll("#shared-grid .invalid, #rows .invalid").forEach((el) => el.classList.remove("invalid"));
+    document.querySelectorAll("#shared-grid .invalid, #rows .invalid").forEach((el) => {
+        el.classList.remove("invalid");
+        el.removeAttribute("aria-invalid");
+    });
     rows.forEach((r) => {
         const s = document.getElementById(`srow-status-${r.id}`);
         if (s) s.innerHTML = "";
@@ -429,7 +604,7 @@ function validateAll() {
 
     // After checking: mark invalid inputs and render the issue list (stays live).
     SHARED_FIELDS.forEach((f) => {
-        document.querySelectorAll(`#shared-grid [data-col="${f.col}"]`).forEach((el) => el.classList.toggle("invalid", shInvalid.has(f.col)));
+        document.querySelectorAll(`#shared-grid [data-col="${f.col}"]`).forEach((el) => markInvalid(el, shInvalid.has(f.col)));
     });
 
     const blocks = [];
@@ -441,14 +616,12 @@ function validateAll() {
         const rowEl = document.getElementById(`srow-${r.id}`);
         if (rowEl) {
             const inUse = r.problemId && !isBlank(r.instance);
-            const probSel = rowEl.querySelector('[data-role="problem"]');
-            if (probSel) probSel.classList.toggle("invalid", !r.problemId);
-            const instInput = rowEl.querySelector('[data-role="instance"]');
-            if (instInput) instInput.classList.toggle("invalid", isBlank(r.instance));
+            markInvalid(rowEl.querySelector('[data-role="problem"]'), !r.problemId);
+            markInvalid(rowEl.querySelector('[data-role="instance"]'), isBlank(r.instance));
             ROW_FIELDS.forEach((f) => {
                 if (!f.required) return;
                 const el = rowEl.querySelector(`[data-col="${f.col}"]`);
-                if (el) el.classList.toggle("invalid", Boolean(inUse) && isBlank(r.data[f.col]));
+                markInvalid(el, Boolean(inUse) && isBlank(r.data[f.col]));
             });
         }
 
@@ -482,10 +655,22 @@ function validateAll() {
 function runCheck() {
     validated = true;
     const errs = validateAll();
-    const panel = document.getElementById("validation-panel");
-    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (errs === 0) showToast("All checks pass ✓");
-    else showToast(`${errs} issue${errs > 1 ? "s" : ""} to fix — see the highlighted fields.`, "error");
+    if (errs === 0) {
+        const panel = document.getElementById("validation-panel");
+        if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        showToast("All checks pass ✓");
+        return;
+    }
+    // Send keyboard / AT users straight to the first problem rather than making
+    // them hunt for the highlighted field.
+    const firstInvalid = document.querySelector("#shared-grid .invalid, #rows .invalid");
+    if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+        firstInvalid.focus({ preventScroll: true });
+    } else {
+        document.getElementById("validation-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    showToast(`${errs} issue${errs > 1 ? "s" : ""} to fix — see the highlighted fields.`, "error");
 }
 
 // ---------------------------------------------------------------------------
@@ -667,13 +852,29 @@ async function importCsvText(text) {
         const get = (c) => (idx[c] >= 0 ? (rec[idx[c]] || "").trim() : "");
         const instance = get("Problem");
         if (!instance) return;
-        // Adopt shared fields from the first imported row if empty.
+        // Adopt shared fields from the imported rows. Import wins over auto-filled
+        // defaults (e.g. today's Date) and blanks, but never clobbers a value the
+        // user typed in by hand before importing.
         SHARED_FIELDS.forEach((f) => {
             if (f.col.startsWith("__")) return;
-            if (isBlank(shared[f.col]) && !isBlank(get(f.col))) shared[f.col] = get(f.col);
+            let imported = get(f.col);
+            if (isBlank(imported) || sharedTouched.has(f.col)) return;
+            // Normalise to the shapes the inputs/validator expect: dates → canonical
+            // YYYY-MM-DD (authors write timestamps, "22. Dec. 2024", …); select values
+            // → the option's exact casing (real data uses "Deterministic").
+            if (f.col === "Date") {
+                imported = qFmtDate(imported);
+            } else if (f.type === "select" && f.options) {
+                const match = f.options.find((o) => o && o.toLowerCase() === imported.toLowerCase());
+                if (match) imported = match;
+            }
+            shared[f.col] = imported;
         });
         const data = {};
         ROW_FIELDS.forEach((f) => { if (!isBlank(get(f.col))) data[f.col] = get(f.col); });
+        // Discard the pristine seeded row so an import doesn't leave a leading
+        // blank row #1 that fails validation.
+        if (added === 0 && rows.length === 1 && !rowHasData(rows[0])) rows.length = 0;
         rowSeq += 1;
         rows.push({
             id: rowSeq,
@@ -728,11 +929,35 @@ async function initSubmitPage() {
     renderShared();
     addRow();
 
-    document.getElementById("add-row-btn").addEventListener("click", () => addRow());
-    document.getElementById("check-btn").addEventListener("click", runCheck);
-    document.getElementById("zip-btn").addEventListener("click", downloadZip);
-    document.getElementById("preview-btn").addEventListener("click", previewFiles);
-    document.getElementById("csv-upload").addEventListener("change", (e) => onImportFiles(e.target.files));
+    // Guard each lookup so a renamed/removed control can't throw and take the
+    // whole page down with it.
+    document.getElementById("add-row-btn")?.addEventListener("click", () => addRow());
+    document.getElementById("check-btn")?.addEventListener("click", runCheck);
+    document.getElementById("zip-btn")?.addEventListener("click", downloadZip);
+    document.getElementById("preview-btn")?.addEventListener("click", previewFiles);
+    document.getElementById("csv-upload")?.addEventListener("change", (e) => onImportFiles(e.target.files));
+
+    // Instance autocomplete: delegate on the persistent #rows host so dynamically
+    // added rows are covered without re-binding per render.
+    const rowsHost = document.getElementById("rows");
+    if (rowsHost) {
+        rowsHost.addEventListener("focusin", onRowsFocusin);
+        rowsHost.addEventListener("focusout", onRowsFocusout);
+        rowsHost.addEventListener("keydown", onRowsKeydown);
+        rowsHost.addEventListener("mousedown", onRowsMousedown);
+    }
+    // Click outside any autocomplete closes the open menu.
+    document.addEventListener("mousedown", (e) => {
+        if (!e.target.closest?.(".ac")) closeAllAc();
+    });
+
+    // Warn before navigating away once the form holds entered data — there is no
+    // server-side draft, so an accidental refresh would otherwise lose everything.
+    window.addEventListener("beforeunload", (e) => {
+        if (sharedTouched.size === 0 && !rows.some(rowHasData)) return;
+        e.preventDefault();
+        e.returnValue = "";
+    });
 
     // Pre-select a problem/instance if linked from another page (?problem=07&instance=foo).
     const params = new URLSearchParams(window.location.search);
@@ -740,7 +965,7 @@ async function initSubmitPage() {
     const inst = params.get("instance") || params.get("name");
     if (pid || inst) {
         rows.length = 0;
-        addRow({ problemId: pid || (inst ? "" : ""), instance: inst || "" });
+        addRow({ problemId: pid || "", instance: inst || "" });
     }
 }
 

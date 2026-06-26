@@ -4,12 +4,14 @@ const {
     esc: qEsc,
     fmtNum: qFmtNum,
     fmtDate: qFmtDate,
+    submissionDate: qSubmissionDate,
     loadProblemData: qLoadProblemData,
     loadProblemSubmissionGroups: qLoadProblemSubmissionGroups,
     instanceUrl: qInstanceUrl,
     problemUrl: qProblemUrl,
     showError: qShowError,
     initCommon: qInitCommon,
+    setPageMeta: qSetPageMeta,
 } = window.QOBLIB;
 
 function fmtMaybeNum(v) {
@@ -93,9 +95,12 @@ async function initSubmissionPage() {
             throw new Error(`Submission \"${submissionId}\" was not found in problem ${problemId}.`);
         }
 
-        const entries = profileEntries(group.profile || {});
+        // Fill the date from the package name when the submission's own date is
+        // missing/unparseable (see submissionDate), so the detail page shows it.
+        const entries = profileEntries({ ...(group.profile || {}), date: qSubmissionDate(group) });
         const sourceFiles = group.source_files || [];
         const sourceDir = group.source_dir || submissionId;
+        qSetPageMeta({ title: `${sourceDir} · ${problem.name} — QOBLIB` });
         const sourceFileCount = sourceFiles.length;
 
         const instances = [...(group.instances || [])].sort((a, b) => String(a.instance || "").localeCompare(String(b.instance || "")));
@@ -147,12 +152,12 @@ async function initSubmissionPage() {
             ${instances.length ? `<div class="tw"><table>
                 <thead>
                     <tr>
-                        <th>Instance</th>
+                        <th data-sort-default="asc">Instance</th>
                         <th style="text-align:right">Objective</th>
                         <th style="text-align:right">Optimality Bound</th>
-                        <th style="text-align:right">Runtime</th>
-                        <th style="text-align:right">CPU</th>
-                        <th style="text-align:right">GPU</th>
+                        <th style="text-align:right">Runtime (s)</th>
+                        <th style="text-align:right">CPU (s)</th>
+                        <th style="text-align:right">GPU (s)</th>
                         <th>Hardware</th>
                         <th style="text-align:right">Vars</th>
                     </tr>

@@ -7,6 +7,7 @@
     <title>QOBLIB - Leaderboard</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
 </head>
@@ -23,7 +24,7 @@
                 <a class="nl" data-nav="submit" href="submit.html">Submit</a>
             </div>
             <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
-            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
     </nav>
 
@@ -32,6 +33,8 @@
             <h2>Leaderboard</h2>
             <p>The current record for each instance: the best feasible submission and who holds it.</p>
         </div>
+
+        <hr class="section-divider" />
 
         <section class="callout">
             <div>
@@ -47,6 +50,8 @@
                 <a class="btn btn-navy" href="submit.html">Open the Submission Builder →</a>
             </div>
         </section>
+
+        <hr class="section-divider" />
 
         <div class="filters">
             <select id="lb-prob" onchange="renderLeaderboard()">
@@ -64,7 +69,7 @@
         </div>
     </main>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <footer class="site-footer">
         <span id="footer-build">Generated from the QOBLIB repository.</span>

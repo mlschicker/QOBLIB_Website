@@ -7,6 +7,8 @@ const INSTANCES_CACHE = new Map();
 const INSTANCE_SUBS_CACHE = new Map();
 const SUBMISSIONS_CACHE = new Map();
 const SUBMISSION_GROUPS_CACHE = new Map();
+const CHARTS_CACHE = new Map();
+const MIP_POINTS_CACHE = new Map();
 let ALL_SUBMISSION_GROUPS_CACHE = null;
 let TABLE_SORT_OBSERVER = null;
 
@@ -104,6 +106,23 @@ function fmtNum(n) {
     return Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
+// Integer counts (instances, variables, …) — locale grouping, no decimals.
+// Used for every raw count so large values get thousands separators site-wide.
+function fmtInt(n) {
+    if (n == null || n === "" || !Number.isFinite(Number(n))) return "-";
+    return Math.round(Number(n)).toLocaleString();
+}
+
+// A value that is usually numeric (runtime, objective, …) but occasionally a
+// free-text marker like "N/A". Format numbers with locale grouping; pass other
+// text through escaped. Shared so runtimes look identical on every page.
+function fmtMaybeNum(v) {
+    if (v == null || v === "") return "-";
+    const compact = typeof v === "string" ? v.replace(/,/g, "").trim() : v;
+    const num = Number(compact);
+    return Number.isFinite(num) && compact !== "" ? fmtNum(num) : esc(String(v));
+}
+
 function fmtText(v) {
     return v == null || v === "" ? "-" : esc(v);
 }
@@ -171,8 +190,46 @@ function fmtDate(v) {
     return `${dt.getUTCFullYear()}-${mm}-${dd}`;
 }
 
+// Submission package directories are named "YYYYMMDD_<method>_<author>", so the
+// date and the method are recoverable from the name even when a submission's own
+// metadata is missing. Used by the submission tables and detail page.
+function submissionDate(group) {
+    // Prefer the submission's own date; fall back to the package-name date prefix
+    // when that is missing or unparseable (some packages have a blank date field).
+    const own = group?.profile?.date;
+    if (Number.isFinite(parseDate(own))) return own;
+    const m = String(group?.source_dir || group?.id || "").match(/^(\d{6,8})_/);
+    return m && Number.isFinite(parseDate(m[1])) ? m[1] : own || "";
+}
+
+function submissionMethod(group) {
+    const id = String(group?.source_dir || group?.id || "").trim();
+    const m = id.match(/^\d{6,8}_(.+)_[^_]+$/);
+    return m ? m[1].replace(/_/g, " ") : id;
+}
+
+// Pretty per-problem URL (e.g. problem/07/). The build generates a static page
+// at each of these (misc/site_builder/html_pages.py); problem.html?id= still
+// works as a fallback. Relative form resolves against <base> on the deep pages
+// and against the site root elsewhere.
 function problemUrl(id) {
-    return `problem.html?id=${encodeURIComponent(id ?? "")}`;
+    return `problem/${encodeURIComponent(id ?? "")}/`;
+}
+
+// Update the document title and canonical link at runtime (for client-rendered
+// detail pages). The canonical is resolved against document.baseURI, so it is
+// correct both on the deep <base> pages and on the ?id= shell.
+function setPageMeta({ title, canonical } = {}) {
+    if (title) document.title = title;
+    if (canonical) {
+        let link = document.querySelector('link[rel="canonical"]');
+        if (!link) {
+            link = document.createElement("link");
+            link.rel = "canonical";
+            document.head.appendChild(link);
+        }
+        link.href = new URL(canonical, document.baseURI).href;
+    }
 }
 
 function instanceUrl(problemId, instanceName) {
@@ -187,14 +244,17 @@ function statusPill(s) {
     // Colours come from CSS variables (defined in styles.css) so the badges
     // track the active theme and stay muted on dark backgrounds.
     const cfg = {
-        optimal: { bg: "var(--pill-ok-bg)", c: "var(--pill-ok-fg)" },
-        solved: { bg: "var(--pill-ok-bg)", c: "var(--pill-ok-fg)" },
-        best_known: { bg: "var(--pill-best-bg)", c: "var(--pill-best-fg)" },
-        submitted: { bg: "var(--pill-sub-bg)", c: "var(--pill-sub-fg)" },
-        open: { bg: "var(--pill-open-bg)", c: "var(--pill-open-fg)" },
+        optimal: { bg: "var(--pill-ok-bg)", c: "var(--pill-ok-fg)", label: "Optimal" },
+        solved: { bg: "var(--pill-ok-bg)", c: "var(--pill-ok-fg)", label: "Solved" },
+        best_known: { bg: "var(--pill-best-bg)", c: "var(--pill-best-fg)", label: "Best known" },
+        submitted: { bg: "var(--pill-sub-bg)", c: "var(--pill-sub-fg)", label: "Submitted" },
+        open: { bg: "var(--pill-open-bg)", c: "var(--pill-open-fg)", label: "Open" },
     };
     const cc = cfg[s] || { bg: "var(--pill-open-bg)", c: "var(--pill-open-fg)" };
-    return `<span class="status-pill" style="background:${cc.bg};color:${cc.c}">${esc(s)}</span>`;
+    // Show a friendly label (matching the filter dropdowns) instead of the raw
+    // machine token, e.g. "Best known" rather than "best_known".
+    const label = cc.label || String(s ?? "").replace(/_/g, " ");
+    return `<span class="status-pill" style="background:${cc.bg};color:${cc.c}">${esc(label)}</span>`;
 }
 
 // Three-way classification of a submission's compute paradigm. The QUBO/Ising
@@ -267,8 +327,16 @@ function renderMarkdown(md) {
     return html.replace(/@@QMATH(\d+)@@/g, (_, i) => esc(stash[Number(i)]));
 }
 
-function renderMath(root) {
-    if (!root || !window.renderMathInElement) return;
+function renderMath(root, _tries) {
+    if (!root) return;
+    // KaTeX auto-render is loaded with `defer`, so on a client-rendered page it may
+    // not be ready when this first runs. Retry briefly instead of silently leaving
+    // raw TeX on the page; give up after ~5s.
+    if (!window.renderMathInElement) {
+        if ((_tries || 0) >= 50) return;
+        setTimeout(() => renderMath(root, (_tries || 0) + 1), 100);
+        return;
+    }
     window.renderMathInElement(root, {
         throwOnError: false,
         delimiters: [
@@ -281,13 +349,14 @@ function renderMath(root) {
 }
 
 function showError(el, msg) {
-    el.innerHTML = `<div class="error-box">Failed to load data: ${esc(msg)}</div>`;
+    if (!el) return;
+    el.innerHTML = `<div class="error-box" role="alert">Failed to load data: ${esc(msg)}</div>`;
 }
 
 function modelLinks(models) {
     if (!models || !models.length) return "";
     return models
-        .map((m) => `<a class="dl" href="${esc(m.raw_url)}" target="_blank">↓ ${esc(m.format)}</a>`)
+        .map((m) => `<a class="dl" href="${esc(m.raw_url)}" target="_blank" rel="noopener">↓ ${esc(m.format)}</a>`)
         .join(" ");
 }
 
@@ -304,7 +373,7 @@ function detailModelList(models) {
                         <div class="resource-title">${esc(m.name)}</div>
                         <div class="resource-sub">${esc(m.approach || "model")} · ${esc(m.format)}</div>
                     </div>
-                    <a class="dl" href="${esc(m.raw_url)}" target="_blank">↓ download</a>
+                    <a class="dl" href="${esc(m.raw_url)}" target="_blank" rel="noopener">↓ download</a>
                 </div>
                 <div class="resource-meta">
                     <span class="badge b-tag">${esc(m.kind || "model")}</span>
@@ -314,7 +383,7 @@ function detailModelList(models) {
                 <details>
                     <summary>Model description</summary>
                     <div class="resource-desc">${renderMarkdown(m.description_md)}</div>
-                    ${m.description_url ? `<div><a class="dl" href="${esc(m.description_url)}" target="_blank">View README ↗</a></div>` : ""}
+                    ${m.description_url ? `<div><a class="dl" href="${esc(m.description_url)}" target="_blank" rel="noopener">View README ↗</a></div>` : ""}
                 </details>` : ""}
             </div>`
         )
@@ -328,7 +397,10 @@ function detailModelList(models) {
 //   Quantum   — solved (optimal by a quantum submission) · open
 function problemCard(p) {
     const bestKnownPct = p.instance_count ? (100 * (p.best_known_count || 0)) / p.instance_count : 0;
-    const solvedClassicalCount = p.solved_count || 0;
+    // The "Classical" bar counts instances solved classically (reference solution
+    // or a classical submission). Fall back to the method-agnostic solved_count
+    // for older data payloads that predate solved_classical_count.
+    const solvedClassicalCount = p.solved_classical_count ?? p.solved_count ?? 0;
     const solvedQuantumCount = p.quantum_solved_count || 0;
     const solvedClassicalPct = p.instance_count ? (100 * solvedClassicalCount) / p.instance_count : 0;
     const solvedQuantumPct = p.instance_count ? (100 * solvedQuantumCount) / p.instance_count : 0;
@@ -360,9 +432,9 @@ function problemCard(p) {
             </div>
             <div class="pcard-foot">
                 <span class="badge b-type">${esc(p.type)}</span>
-                ${p.vars_min != null ? `<span class="badge b-vars">${p.vars_min}-${p.vars_max} vars</span>` : ""}
+                ${p.vars_min != null ? `<span class="badge b-vars">${fmtInt(p.vars_min)}–${fmtInt(p.vars_max)} vars</span>` : ""}
                 <span class="badge b-form">${esc(p.formulation)}</span>
-                <span class="badge b-tag">${p.instance_count} inst.</span>
+                <span class="badge b-tag">${fmtInt(p.instance_count)} inst.</span>
             </div>
         </a>`;
 }
@@ -417,6 +489,39 @@ async function loadProblemSubmissionGroups(id) {
     return SUBMISSION_GROUPS_CACHE.get(id);
 }
 
+// Pre-rendered performance-chart SVGs (built by misc/site_builder/charts.py).
+// Returns null when a problem has no charts or the chunk is absent, so callers
+// can simply skip the performance section.
+async function loadProblemCharts(id) {
+    if (CHARTS_CACHE.has(id)) return CHARTS_CACHE.get(id);
+    let entries = null;
+    try {
+        const d = await loadJSON(`data/problems/${id}/charts.json`);
+        entries = d.entries || null;
+    } catch (e) {
+        entries = null;
+    }
+    CHARTS_CACHE.set(id, entries);
+    return entries;
+}
+
+// Pre-baked "MIP Instance Map" scatter points for one problem (built by
+// misc/site_builder/metrics.py → data/problems/<id>/mip.json). Replaces the old
+// runtime fetch of metrics.csv files from raw.githubusercontent.com. Returns an
+// empty array when a problem has no LP metrics or the chunk is absent.
+async function loadProblemMipPoints(id) {
+    if (MIP_POINTS_CACHE.has(id)) return MIP_POINTS_CACHE.get(id);
+    let points = [];
+    try {
+        const d = await loadJSON(`data/problems/${id}/mip.json`);
+        points = d.points || [];
+    } catch (e) {
+        points = [];
+    }
+    MIP_POINTS_CACHE.set(id, points);
+    return points;
+}
+
 async function loadProblemData(id) {
     const [meta, instances, instanceSubs] = await Promise.all([
         loadProblemMeta(id),
@@ -438,6 +543,16 @@ async function loadAllSubmissionGroups() {
     const chunks = await Promise.all(idx.problems.map((p) => loadProblemSubmissionGroups(p.id)));
     ALL_SUBMISSION_GROUPS_CACHE = chunks.flat();
     return ALL_SUBMISSION_GROUPS_CACHE;
+}
+
+// Aggregated, trimmed instance list for the Instances page (one request instead
+// of fetching every problem's full instances.json + mip.json). Shape:
+//   { problems: [ { id, name, columns, instances: [...], points: [...] } ] }
+let INSTANCES_LIST_CACHE = null;
+async function loadInstancesList() {
+    if (INSTANCES_LIST_CACHE) return INSTANCES_LIST_CACHE;
+    INSTANCES_LIST_CACHE = await loadJSON("data/instances.json");
+    return INSTANCES_LIST_CACHE;
 }
 
 function setActiveNav(navId) {
@@ -512,8 +627,10 @@ function animateCount(id, target) {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove("loading-val");
-    if (target === 0) {
-        el.textContent = "0";
+    // Respect reduced-motion: jump straight to the final value, no count-up.
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (target === 0 || reduceMotion) {
+        el.textContent = Number(target || 0).toLocaleString();
         return;
     }
     let cur = 0;
@@ -523,6 +640,37 @@ function animateCount(id, target) {
         el.textContent = cur.toLocaleString();
         if (cur >= target) clearInterval(timer);
     }, 30);
+}
+
+// Reset every header to its base label, then mark `activeTh` with a ▲/▼ arrow and
+// aria-sort so a table visibly shows which column it is sorted by. Shared by the
+// click handler, the on-load default, and the programmatic setTableSortIndicator.
+function applySortIndicator(headers, activeTh, dir) {
+    headers.forEach((h) => {
+        h.dataset.sortDir = "none";
+        h.textContent = h.dataset.sortLabel || String(h.textContent || "");
+        h.removeAttribute("aria-sort");
+    });
+    if (!activeTh || (dir !== "asc" && dir !== "desc")) return;
+    const label = activeTh.dataset.sortLabel || String(activeTh.textContent || "");
+    activeTh.dataset.sortDir = dir;
+    activeTh.textContent = `${label} ${dir === "asc" ? "▲" : "▼"}`;
+    activeTh.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
+}
+
+// Programmatically reflect a non-click sort (e.g. a dropdown-driven one) in a
+// table's header. `header` is the column label (case-insensitive) or a th node.
+function setTableSortIndicator(table, header, dir) {
+    if (!table) return;
+    const headers = Array.from(table.querySelectorAll("thead th"));
+    if (!headers.length) return;
+    const th =
+        typeof header === "string"
+            ? headers.find(
+                  (h) => (h.dataset.sortLabel || h.textContent || "").trim().toLowerCase() === header.trim().toLowerCase(),
+              )
+            : header;
+    applySortIndicator(headers, th, dir);
 }
 
 function enableTableSorting(root = document, options = {}) {
@@ -577,7 +725,8 @@ function enableTableSorting(root = document, options = {}) {
             if (av.type === "number" && bv.type === "number") {
                 if (av.value !== bv.value) return dir === "asc" ? av.value - bv.value : bv.value - av.value;
             } else {
-                const cmp = String(av.value).localeCompare(String(bv.value));
+                // Numeric-aware so "network10" sorts after "network2", not before.
+                const cmp = String(av.value).localeCompare(String(bv.value), undefined, { numeric: true });
                 if (cmp !== 0) return dir === "asc" ? cmp : -cmp;
             }
             return a.idx - b.idx;
@@ -617,26 +766,48 @@ function enableTableSorting(root = document, options = {}) {
             hasSortableHeader = true;
 
             th.style.cursor = "pointer";
-            th.title = "Click to sort";
-            th.addEventListener("click", () => {
+            th.title = "Click or press Enter to sort";
+            // Make the header operable and discoverable for keyboard / AT users.
+            // The <th> keeps its implicit columnheader role; we add focusability,
+            // a sort-state hint, and Enter/Space activation below.
+            th.tabIndex = 0;
+            th.setAttribute("aria-sort", "none");
+            const doSort = () => {
                 const nextDir = th.dataset.sortDir === "asc" ? "desc" : "asc";
-
-                headers.forEach((h) => {
-                    h.dataset.sortDir = "none";
-                    const baseLabel = h.dataset.sortLabel || String(h.textContent || "");
-                    h.textContent = baseLabel;
-                    h.removeAttribute("aria-sort");
-                });
-
-                th.dataset.sortDir = nextDir;
-                th.textContent = `${label} ${nextDir === "asc" ? "▲" : "▼"}`;
-                th.setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+                applySortIndicator(headers, th, nextDir);
                 sortRowsByColumn(table, colIdx, nextDir);
+                table.qoblibSort = { colIdx, dir: nextDir };
+            };
+            th.addEventListener("click", doSort);
+            th.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                    e.preventDefault();
+                    doSort();
+                }
             });
         });
 
         if (hasSortableHeader) {
             table.dataset.sortableBound = "1";
+            // Pages that re-render their <tbody> under a persistent <thead> (on
+            // filter/search) call this to re-apply the user's chosen sort to the
+            // fresh rows. Without it the new rows render in the page's default order
+            // while the header still shows the old sort arrow.
+            table.reapplySort = () => {
+                const s = table.qoblibSort;
+                if (!s || !headers[s.colIdx]) return;
+                applySortIndicator(headers, headers[s.colIdx], s.dir);
+                sortRowsByColumn(table, s.colIdx, s.dir);
+            };
+            // Reflect the table's initial sort (applied by the page's own render
+            // code) in the header so it is visible without a click. A column opts
+            // in with data-sort-default="asc|desc".
+            const defaultTh = headers.find(
+                (h) => h.dataset.sortDefault === "asc" || h.dataset.sortDefault === "desc",
+            );
+            if (defaultTh && defaultTh.style.cursor === "pointer") {
+                applySortIndicator(headers, defaultTh, defaultTh.dataset.sortDefault);
+            }
         }
     });
 }
@@ -650,8 +821,8 @@ async function renderFooter() {
         const commit = idx.commit;
         const repo = "https://github.com/ZIB-AOPT/QOBLIB";
         const commitHtml = commit
-            ? `<a href="${repo}/commit/${esc(commit)}" target="_blank">${esc(String(commit).slice(0, 7))}</a>`
-            : `<a href="${repo}" target="_blank">repository</a>`;
+            ? `<a href="${repo}/commit/${esc(commit)}" target="_blank" rel="noopener">${esc(String(commit).slice(0, 7))}</a>`
+            : `<a href="${repo}" target="_blank" rel="noopener">repository</a>`;
         buildEl.innerHTML = builtAt
             ? `Generated from ${commitHtml} on ${esc(builtAt)}`
             : `Generated from the QOBLIB ${commitHtml}`;
@@ -671,7 +842,9 @@ function footerDataTarget() {
     const pid = probId ? String(probId).padStart(2, "0") : null;
 
     if (page === "leaderboard.html") return { href: "data/leaderboard.json", label: "Download leaderboard data" };
-    if (page === "submissions.html") return { href: "data/leaderboard.json", label: "Download submission data" };
+    // The submissions overview is assembled from many per-problem chunks, so there
+    // is no single "submissions" payload to download — fall through to the
+    // site-wide index.json rather than mislabel the leaderboard file.
     if (page === "problem.html" && pid) return { href: `data/problems/${pid}/instances.json`, label: "Download this problem's data" };
     if (page === "instance.html" && pid) return { href: `data/problems/${pid}/instance_submissions.json`, label: "Download this instance's data" };
     if (page === "submission.html" && pid) return { href: `data/problems/${pid}/submission_groups.json`, label: "Download this submission's data" };
@@ -741,13 +914,116 @@ function downloadCsv(filename, headers, rows) {
     URL.revokeObjectURL(url);
 }
 
+// --- figure lightbox -------------------------------------------------------
+// A shared "expand" affordance for any figure (problem illustrations, the MIP
+// instance map, the performance/convergence charts, the home-page landscape
+// plots). attachFigureExpand() adds a hover/focus button to a figure container;
+// clicking it opens the figure's SVG/img enlarged in a single reused overlay.
+// The graphic is read at click time, so live charts (which re-inject their SVG
+// on toggle/resize) always show their current state.
+
+let figLightbox = null;
+let figLightboxTrigger = null;
+
+function closeFigureLightbox() {
+    if (!figLightbox) return;
+    figLightbox.hidden = true;
+    figLightbox.querySelector(".fig-lightbox-inner").innerHTML = "";
+    if (figLightboxTrigger && document.contains(figLightboxTrigger)) figLightboxTrigger.focus();
+    figLightboxTrigger = null;
+}
+
+function ensureFigureLightbox() {
+    if (figLightbox) return figLightbox;
+    figLightbox = document.createElement("div");
+    figLightbox.className = "fig-lightbox";
+    figLightbox.hidden = true;
+    figLightbox.innerHTML =
+        '<div class="fig-lightbox-inner" role="dialog" aria-modal="true" aria-label="Enlarged figure"></div>' +
+        '<button type="button" class="fig-lightbox-close" aria-label="Close enlarged figure" title="Close">✕</button>';
+    figLightbox.addEventListener("click", (ev) => {
+        if (ev.target === figLightbox || ev.target.closest(".fig-lightbox-close")) closeFigureLightbox();
+    });
+    document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape" && !figLightbox.hidden) closeFigureLightbox();
+    });
+    document.body.appendChild(figLightbox);
+    return figLightbox;
+}
+
+function openFigureLightbox(html, trigger) {
+    if (!html) return;
+    const box = ensureFigureLightbox();
+    box.querySelector(".fig-lightbox-inner").innerHTML = html;
+    box.hidden = false;
+    figLightboxTrigger = trigger || null;
+    box.querySelector(".fig-lightbox-close").focus();
+}
+
+// Add a top-right expand button to `container`. By default the lightbox shows the
+// whole figure (heading, legend and graphic) so nothing is lost when enlarged.
+// `opts.target` (a selector string or function) instead enlarges just that single
+// element; `opts.html` (a function returning an HTML string) supplies fully custom
+// lightbox content (e.g. a re-laid-out multi-part figure). No-op if the container
+// has no graphic yet, so call it after the figure has rendered.
+function attachFigureExpand(container, opts = {}) {
+    if (!container || container.querySelector(":scope > .fig-expand")) return;
+    const findGraphic = () => {
+        if (typeof opts.target === "function") return opts.target();
+        if (typeof opts.target === "string") return container.querySelector(opts.target);
+        return container.querySelector("svg, img");
+    };
+    if (!findGraphic()) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fig-expand";
+    btn.setAttribute("aria-label", "Expand figure");
+    btn.title = "Expand figure";
+    btn.innerHTML = '<span aria-hidden="true">⤢</span> Expand';
+    btn.addEventListener("click", () => {
+        // opts.html lets a caller supply richer lightbox content than a single
+        // graphic — e.g. a whole figure with its legend, sub-plots and caption.
+        if (typeof opts.html === "function") {
+            const html = opts.html();
+            if (html) openFigureLightbox(html, btn);
+            return;
+        }
+        // An explicit opts.target enlarges just that one element.
+        if (typeof opts.target !== "undefined") {
+            const graphic = findGraphic();
+            if (graphic) openFigureLightbox(graphic.outerHTML, btn);
+            return;
+        }
+        // Default: enlarge the whole figure — heading (title), legend and graphic —
+        // not just the first <svg>/<img>, so legends and titles aren't lost. Clone
+        // the container, then drop the expand button and any interactive tooltip.
+        const clone = container.cloneNode(true);
+        clone.querySelectorAll(".fig-expand, .mip-tooltip").forEach((el) => el.remove());
+        const html = clone.innerHTML.trim();
+        if (html) openFigureLightbox(html, btn);
+    });
+    container.classList.add("has-fig-expand");
+    container.appendChild(btn);
+}
+
+// Wire expand buttons onto every known figure container under `root`.
+function enhanceFigures(root = document) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll(".chart-card, .plot-card, .d-desc-visual").forEach((el) => attachFigureExpand(el));
+}
+
 window.QOBLIB = {
     esc,
     fmtBytes,
     fmtNum,
+    fmtInt,
+    fmtMaybeNum,
     fmtText,
     parseDate,
     fmtDate,
+    submissionDate,
+    submissionMethod,
     problemUrl,
     instanceUrl,
     submissionUrl,
@@ -765,8 +1041,16 @@ window.QOBLIB = {
     loadProblemData,
     loadAllProblemSubmissions,
     loadProblemSubmissionGroups,
+    loadProblemCharts,
+    loadProblemMipPoints,
     loadAllSubmissionGroups,
+    loadInstancesList,
+    setPageMeta,
+    openFigureLightbox,
+    attachFigureExpand,
+    enhanceFigures,
     enableTableSorting,
+    setTableSortIndicator,
     initCommon,
     initTheme,
     applyTheme,

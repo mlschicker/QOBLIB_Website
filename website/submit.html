@@ -7,9 +7,10 @@
     <title>QOBLIB - Submit</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 </head>
 <body data-nav="submit">
     <nav>
@@ -24,7 +25,7 @@
                 <a class="nl" data-nav="submit" href="submit.html">Submit</a>
             </div>
             <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
-            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
     </nav>
 
@@ -37,6 +38,8 @@
                 re-runs the authoritative checker (including solution feasibility) when you open the pull request.
             </p>
         </div>
+
+        <hr class="section-divider" />
 
         <!-- Step indicator -->
         <ol class="steps">
@@ -76,13 +79,13 @@
         <section class="sub-panel" id="validation-panel">
             <div class="sp-title">
                 3 · Validation
-                <span class="sp-hint" id="val-summary">—</span>
+                <span class="sp-hint" id="val-summary" aria-live="polite">—</span>
                 <span class="sp-actions">
                     <button class="btn btn-navy btn-sm" id="check-btn" type="button">✓ Check submission</button>
                 </span>
             </div>
             <p class="sub-note">Nothing is flagged until you press <strong>Check submission</strong>. After that, highlights update live as you fix them.</p>
-            <div id="val-list"></div>
+            <div id="val-list" aria-live="polite"></div>
         </section>
 
         <!-- Export -->
@@ -96,8 +99,8 @@
             <div class="hero-actions">
                 <button class="btn btn-navy" id="zip-btn" type="button">⤓ Download submission ZIP</button>
                 <button class="btn btn-ghost" id="preview-btn" type="button">Preview files</button>
-                <a class="btn btn-ghost" id="pr-btn" href="https://github.com/ZIB-AOPT/QOBLIB/compare" target="_blank">Open a pull request ↗</a>
-                <a class="btn btn-ghost" href="https://github.com/ZIB-AOPT/QOBLIB/blob/main/CONTRIBUTING.md" target="_blank">Submission guide ↗</a>
+                <a class="btn btn-ghost" id="pr-btn" href="https://github.com/ZIB-AOPT/QOBLIB/compare" target="_blank" rel="noopener">Open a pull request ↗</a>
+                <a class="btn btn-ghost" href="https://github.com/ZIB-AOPT/QOBLIB/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Submission guide ↗</a>
             </div>
             <div id="preview-out" class="preview-out" style="display:none"></div>
         </section>
@@ -108,7 +111,7 @@
         <span><a href="data/index.json">Download site data</a></span>
     </footer>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="assets/common.js"></script>
     <script src="assets/submit.js"></script>

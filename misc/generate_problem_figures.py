@@ -79,7 +79,7 @@ def polygon(pts, fill, stroke=None, opacity=1.0, sw=1.5):
     return f'<polygon points="{p}" style="{s}" />'
 
 
-def text(x, y, s, fill=MUTED, size=11, anchor="middle", extra_style=""):
+def text(x, y, s, fill=MUTED, size=14, anchor="middle", extra_style=""):
     return (
         f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" '
         f'style="fill:{fill};font:{size}px var(--mono){(";" + extra_style) if extra_style else ""}">{s}</text>'
@@ -269,7 +269,7 @@ def fig_marketsplit():
             body.append(node(*p, 10, WARM, sw=2.5))
         else:
             body.append(node(*p, 6.5, FAINT, sw=2))
-    body.append(text(150, 24, "Ax = b  on  {0,1}ⁿ", fill=FAINT, size=11))
+    body.append(text(150, 24, "Ax = b  on  {0,1}ⁿ", fill=FAINT, size=14))
     return svg(W, H, "".join(body), "Market split: equality hyperplanes intersecting the Boolean lattice")
 
 
@@ -298,7 +298,7 @@ def fig_labs():
         body.append(line(x, base_y, x, tip, SURFACE, 2))
         body.append(path(f"M {x-3:.0f} {tip+wing:.0f} L {x:.0f} {tip:.0f} L {x+3:.0f} {tip+wing:.0f}",
                          stroke=SURFACE, sw=2))
-    body.append(text(160, 98, "±1 sequence  (length 11)", fill=FAINT, size=10))
+    body.append(text(160, 98, "±1 sequence  (length 11)", fill=FAINT, size=13))
 
     # autocorrelation sidelobes C_k for k = 1..n-1 (computed above)
     base = 168
@@ -312,7 +312,7 @@ def fig_labs():
             body.append(node(x, base, 2.4, FAINT, sw=0))   # mark the zero sidelobes
         else:
             body.append(line(x, base, x, base - v * scale, TEAL, 5))
-    body.append(text(160, 216, "autocorrelation Cₖ   (max |Cₖ| = 1)", fill=FAINT, size=10))
+    body.append(text(160, 216, "autocorrelation Cₖ   (max |Cₖ| = 1)", fill=FAINT, size=13))
     return svg(W, H, "".join(body), "LABS: a Barker-11 sequence and its low autocorrelation sidelobes")
 
 
@@ -350,11 +350,11 @@ def fig_birkhoff():
         # "1/3 Pₖ": a stacked fraction next to the permutation name
         fx = cx - 13
         out = [
-            text(fx, cy - 2, "1", MUTED, 11),
+            text(fx, cy - 2, "1", MUTED, 12),
             line(fx - 5, cy + 1, fx + 5, cy + 1, MUTED, 1.1),
-            text(fx, cy + 12, "3", MUTED, 11),
-            f'<text x="{cx+2:.1f}" y="{cy+8:.1f}" style="fill:{MUTED};font:14px var(--sans)">'
-            f'P<tspan dy="3" style="font-size:9px">{idx}</tspan></text>',
+            text(fx, cy + 12, "3", MUTED, 12),
+            f'<text x="{cx+2:.1f}" y="{cy+8:.1f}" style="fill:{MUTED};font:16px var(--sans)">'
+            f'P<tspan dy="3" style="font-size:10px">{idx}</tspan></text>',
         ]
         return "".join(out)
 
@@ -367,7 +367,7 @@ def fig_birkhoff():
     cy_lbl = gy + size + 20
     body.append(grid_at(12, gy, [], MUTED, faint_all=True))
     body.append(f'<text x="{12 + size / 2:.1f}" y="{cy_lbl + 4:.1f}" text-anchor="middle" '
-                f'style="fill:{MUTED};font:14px var(--sans)">D</text>')
+                f'style="fill:{MUTED};font:16px var(--sans)">D</text>')
     x = 12 + size
     body.append(text(x + 13, gy + size / 2 + 5, "=", fill=FAINT, size=18))
     x += 26
@@ -431,9 +431,9 @@ def fig_portfolio():
     body.append(node(176, 92, 9, WARM))
     body.append(f'<circle cx="176" cy="92" r="15" style="fill:none;stroke:{WARM};'
                 'stroke-width:1.6;opacity:0.55" />')
-    body.append(text(280, ay0 + 16, "risk", fill=FAINT, size=10, anchor="end"))
+    body.append(text(280, ay0 + 16, "risk", fill=FAINT, size=13, anchor="end"))
     body.append(f'<text x="{ax-14}" y="46" text-anchor="middle" '
-                f'style="fill:{FAINT};font:10px var(--mono)" transform="rotate(-90 {ax-14} 46)">return</text>')
+                f'style="fill:{FAINT};font:13px var(--mono)" transform="rotate(-90 {ax-14} 46)">return</text>')
     return svg(W, H, "".join(body), "Portfolio optimization: the efficient frontier and a chosen portfolio")
 
 

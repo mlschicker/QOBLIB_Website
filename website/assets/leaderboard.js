@@ -18,6 +18,8 @@ const {
     SUBMISSION_CATEGORIES: qCATS,
     catBadge: qCatBadge,
     downloadCsv: qDownloadCsv,
+    fmtMaybeNum: qFmtMaybeNum,
+    enableTableSorting: qEnableTableSorting,
 } = window.QOBLIB;
 
 function lbNum(v) {
@@ -129,7 +131,6 @@ async function initLeaderboardPage() {
 
 function renderLeaderboard() {
     const pid = document.getElementById("lb-prob").value || "";
-    const iid = document.getElementById("lb-inst").value || "";
 
     // Repopulate the instance filter for the chosen problem.
     const instSel = document.getElementById("lb-inst");
@@ -150,8 +151,14 @@ function renderLeaderboard() {
     document.getElementById("lb-count").textContent = `${rows.length} record${rows.length !== 1 ? "s" : ""}`;
 
     const content = document.getElementById("lb-content");
+    // This page rebuilds its whole <table> on every filter change, which would
+    // otherwise drop any column sort the user picked. Capture it first, then
+    // restore it onto the freshly-built table below.
+    const prevSort = content.querySelector("table")?.qoblibSort;
+
     if (!rows.length) {
-        content.innerHTML = '<div class="lb-empty">No submissions yet.</div>';
+        const filtering = pid || (document.getElementById("lb-inst").value || "");
+        content.innerHTML = `<div class="lb-empty">${filtering ? "No records match the current filters." : "No submissions yet."}</div>`;
         return;
     }
 
@@ -165,7 +172,7 @@ function renderLeaderboard() {
                 <th>Holder</th>
                 <th>Type</th>
                 <th>Date</th>
-                <th style="text-align:right">Runtime</th>
+                <th style="text-align:right">Runtime (s)</th>
                 <th style="text-align:right">Subs</th>
             </tr>
         </thead>
@@ -176,19 +183,30 @@ function renderLeaderboard() {
                         <tr>
                             <td class="mono"><a class="rlink mono" href="${qInstanceUrl(r.problem_id, r.instance)}">${qEsc(r.instance)}</a></td>
                             <td><a class="badge b-type" href="${qProblemUrl(r.problem_id)}">${String(r.problem_id).padStart(2, "0")}</a></td>
-                            <td class="num" style="font-weight:600">${r.noValue ? '<span title="A feasible solution was found; this problem reports no objective value">feasible</span>' : qFmtNum(r.value)}${r.reachedBest ? ' <span title="Reaches the best-known objective" style="color:#c79a3a">★</span>' : ""}</td>
+                            <td class="num" style="font-weight:600">${r.noValue ? '<span title="A feasible solution was found; this problem reports no objective value">feasible</span>' : qFmtNum(r.value)}${r.reachedBest ? ' <span title="Reaches the best-known objective" style="color:var(--star)">★</span>' : ""}</td>
                             <td>${qStatusPill(r.status)}</td>
                             <td>${r.source_dir ? `<a class="rlink" href="${qSubmissionUrl(r.problem_id, r.source_dir)}">${qFmtText(r.holder)}</a>` : qFmtText(r.holder)}</td>
                             <td>${qCatBadge(r.category)}</td>
                             <td class="mono">${qEsc(qFmtDate(r.date))}</td>
-                            <td class="num">${qFmtText(r.runtime)}</td>
+                            <td class="num">${qFmtMaybeNum(r.runtime)}</td>
                             <td class="num">${r.nSubs}</td>
                         </tr>`,
                 )
                 .join("")}
         </tbody>
     </table></div>
-    <div class="table-legend" style="margin:.4rem 0 .6rem;color:var(--muted)">One record per instance: the best feasible submission and who holds it. ★ = reaches the best-known objective. "Subs" counts feasible submissions for that instance.</div>`;
+    <div class="table-legend" style="margin:.4rem 0 .6rem;color:var(--muted)">One record per instance: the best feasible submission and who holds it. ★ = reaches the best-known objective. "Subs" counts the ranked feasible submissions for that instance.</div>`;
+
+    // Bind sorting on the new table now (rather than waiting for the async
+    // MutationObserver) so we can immediately restore the user's prior sort.
+    if (prevSort) {
+        const table = content.querySelector("table");
+        if (table) {
+            qEnableTableSorting(content);
+            table.qoblibSort = prevSort;
+            table.reapplySort?.();
+        }
+    }
 }
 
 function getLeaderboardRows() {
@@ -207,7 +225,7 @@ function downloadLeaderboardCsv() {
     const rows = getLeaderboardRows();
     const headers = [
         "Problem ID", "Instance", "Best objective", "Reaches best", "Status",
-        "Holder", "Type", "Date", "Runtime", "Submissions",
+        "Holder", "Type", "Date", "Runtime (s)", "Submissions",
     ];
     const data = rows.map((r) => [
         String(r.problem_id).padStart(2, "0"),

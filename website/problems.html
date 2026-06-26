@@ -7,6 +7,7 @@
     <title>QOBLIB - Problems</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
 </head>
@@ -23,7 +24,7 @@
                 <a class="nl" data-nav="submit" href="submit.html">Submit</a>
             </div>
             <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
-            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
     </nav>
 
@@ -36,6 +37,8 @@
             </p>
         </div>
 
+        <hr class="section-divider" />
+
         <div class="jump-list" id="prob-jump"></div>
 
         <div class="bar-legend">
@@ -43,6 +46,7 @@
             <span class="legend-item"><span class="swatch" style="background:var(--bar-best-known-classical)"></span>Best known</span>
             <span class="legend-item"><span class="swatch" style="background:var(--bar-open-classical)"></span>Open</span>
             <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-quantum)"></span>Solved by quantum</span>
+            <span class="legend-item"><span class="swatch" style="background:var(--bar-open-quantum)"></span>Not solved by quantum</span>
         </div>
 
         <div class="pgrid" id="pgrid">

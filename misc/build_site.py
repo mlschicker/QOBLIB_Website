@@ -64,6 +64,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Git ref/sha used for download links.",
     )
     parser.add_argument(
+        "--base-url",
+        default=os.environ.get("SITE_BASE_URL", config.DEFAULT_BASE_URL),
+        help="Deployed origin for canonical/Open Graph URLs and the pretty "
+        "per-problem <base> path (default: %(default)s).",
+    )
+    parser.add_argument(
         "--no-static",
         action="store_true",
         help="Only generate data (skip copying the static frontend).",
@@ -76,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         repo_url=args.repo_url,
         ref=args.ref,
         copy_static=not args.no_static,
+        base_url=args.base_url,
     )
     print(
         f"\nBuilt site at {args.out} "

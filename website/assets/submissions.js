@@ -13,6 +13,9 @@ const {
     SUBMISSION_CATEGORIES: qCATS,
     catBadge: qCatBadge,
     downloadCsv: qDownloadCsv,
+    submissionDate: qSubmissionDate,
+    submissionMethod: qSubmissionMethod,
+    showError: qShowError,
 } = window.QOBLIB;
 
 let allGroups = [];
@@ -81,7 +84,6 @@ function getFilteredGroups() {
     const search = document.getElementById("sub-search").value.trim().toLowerCase();
     const problemId = document.getElementById("sub-prob").value || "";
     const category = document.getElementById("sub-cat").value || "";
-    const sortMode = document.getElementById("sub-sort").value || "latest";
 
     const filtered = allGroups.filter((group) => {
         if (problemId && group.problem_id !== problemId) return false;
@@ -91,25 +93,14 @@ function getFilteredGroups() {
         return groupSearchText(group, problem).includes(search);
     });
 
+    // Default order is newest first. Re-sorting by any column is handled by the
+    // clickable table headers (enableTableSorting), so no sort dropdown is needed.
     filtered.sort((a, b) => {
-        // Compare on parsed timestamps so mixed source formats order correctly;
-        // unparseable dates sort last. Newest first.
-        const tsA = qParseDate(a.profile?.date);
-        const tsB = qParseDate(b.profile?.date);
-        const byDateDesc = (Number.isFinite(tsB) ? tsB : -Infinity) - (Number.isFinite(tsA) ? tsA : -Infinity);
-        const instA = (a.instances || []).length;
-        const instB = (b.instances || []).length;
-
-        if (sortMode === "problem") {
-            return String(a.problem_id).localeCompare(String(b.problem_id)) || byDateDesc || String(a.id).localeCompare(String(b.id));
-        }
-        if (sortMode === "instances") {
-            return instB - instA || String(a.problem_id).localeCompare(String(b.problem_id)) || String(a.id).localeCompare(String(b.id));
-        }
-        if (sortMode === "package") {
-            return String(a.id).localeCompare(String(b.id)) || String(a.problem_id).localeCompare(String(b.problem_id));
-        }
-        return byDateDesc || String(a.problem_id).localeCompare(String(b.problem_id)) || String(a.id).localeCompare(String(b.id));
+        const tsA = qParseDate(qSubmissionDate(a));
+        const tsB = qParseDate(qSubmissionDate(b));
+        return (Number.isFinite(tsB) ? tsB : -Infinity) - (Number.isFinite(tsA) ? tsA : -Infinity) ||
+            String(a.problem_id).localeCompare(String(b.problem_id)) ||
+            String(a.id).localeCompare(String(b.id));
     });
 
     return filtered;
@@ -120,8 +111,9 @@ function renderSubmissions() {
     document.getElementById("sub-count").textContent = `${filtered.length} submission${filtered.length !== 1 ? "s" : ""}`;
 
     const body = document.getElementById("sub-tbody");
+
     if (!filtered.length) {
-        body.innerHTML = '<tr><td colspan="8" class="loading">No submissions match the current filters</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" class="text-center padded">No submissions match the current filters.</td></tr>';
         return;
     }
 
@@ -129,24 +121,25 @@ function renderSubmissions() {
         .map((group) => {
             const problem = problemIndex.get(group.problem_id);
             const submitter = group.profile?.submitter || "-";
-            const date = group.profile?.date ? qFmtDate(group.profile.date) : "-";
+            const date = qFmtDate(qSubmissionDate(group));
             const instanceCount = (group.instances || []).length;
-            const fileCount = (group.source_files || []).length;
+            // The package name already carries the date + author; surface just the
+            // method here and link it to the package's detail page.
             return `
                 <tr>
-                    <td class="mono">
-                        <a class="rlink mono" href="${qSubmissionUrl(group.problem_id, group.id)}">${qEsc(group.id)}</a>
-                    </td>
+                    <td><a class="rlink" href="${qSubmissionUrl(group.problem_id, group.id)}" title="${qEsc(group.id)}">${qEsc(qSubmissionMethod(group))}</a></td>
                     <td><a class="badge b-type" href="${qProblemUrl(group.problem_id)}">${qEsc(formatProblemLabel(problem))}</a></td>
                     <td>${qCatBadge(groupCategory(group))}</td>
                     <td>${qEsc(submitter)}</td>
                     <td class="mono">${qEsc(date)}</td>
                     <td class="num">${instanceCount.toLocaleString()}</td>
-                    <td class="num">${fileCount.toLocaleString()}</td>
-                    <td><a class="dl" href="${qSubmissionUrl(group.problem_id, group.id)}">Open</a></td>
                 </tr>`;
         })
         .join("");
+
+    // The <thead> persists across filter/search re-renders, so re-apply the
+    // user's chosen column sort (and its header arrow) to the fresh rows.
+    document.querySelector("#submissions-table table")?.reapplySort?.();
 }
 
 async function initSubmissionsPage() {
@@ -161,26 +154,32 @@ async function initSubmissionsPage() {
         renderStats(allGroups);
         renderSubmissions();
     } catch (error) {
-        document.getElementById("submissions-table").innerHTML = `<div class="error-box">Failed to load data: ${qEsc(error.message)}</div>`;
+        ["sub-stat-packages", "sub-stat-instances", "sub-stat-problems", "sub-stat-authors"].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = "—";
+        });
+        qShowError(document.getElementById("submissions-table"), error.message);
     }
 }
 
 function downloadSubmissionsCsv() {
     const groups = getFilteredGroups();
     const headers = [
-        "Package", "Problem ID", "Problem", "Paradigm", "Submitter", "Date",
+        "Package", "Method", "Problem ID", "Problem", "Paradigm", "Submitter", "Date",
         "Instances", "Files", "Workflow", "Algorithm", "Hardware", "Source files",
     ];
     const data = groups.map((group) => {
         const problem = problemIndex.get(group.problem_id);
         const profile = group.profile || {};
+        const date = qSubmissionDate(group);
         return [
             group.id,
+            qSubmissionMethod(group),
             String(group.problem_id).padStart(2, "0"),
             problem?.name || "",
             (qCATS[groupCategory(group)] || qCATS.classical).label,
             profile.submitter || "",
-            profile.date ? qFmtDate(profile.date) : "",
+            date ? qFmtDate(date) : "",
             (group.instances || []).length,
             (group.source_files || []).length,
             profile.workflow || "",

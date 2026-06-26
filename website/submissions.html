@@ -7,6 +7,7 @@
     <title>QOBLIB - Submissions</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
 </head>
@@ -23,7 +24,7 @@
                 <a class="nl" data-nav="submit" href="submit.html">Submit</a>
             </div>
             <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
-            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
     </nav>
 
@@ -32,6 +33,8 @@
             <h2>Submissions</h2>
             <p>One row per uploaded submission package, with links to the problem page and package details.</p>
         </div>
+
+        <hr class="section-divider" />
 
         <section class="stats-bar">
             <div class="stat">
@@ -52,6 +55,8 @@
             </div>
         </section>
 
+        <hr class="section-divider" />
+
         <div class="filters">
             <input type="text" class="fi-grow" id="sub-search" placeholder="Search by package, author, or problem..." oninput="renderSubmissions()" />
             <select id="sub-prob" onchange="renderSubmissions()">
@@ -63,12 +68,6 @@
                 <option value="quantum_sim">Quantum simulator</option>
                 <option value="classical">Classical</option>
             </select>
-            <select id="sub-sort" onchange="renderSubmissions()">
-                <option value="latest">Latest first</option>
-                <option value="problem">Problem</option>
-                <option value="instances">Most instances</option>
-                <option value="package">Package id</option>
-            </select>
             <span class="fi-count" id="sub-count"></span>
             <button class="btn btn-ghost btn-sm" type="button" id="sub-download" onclick="downloadSubmissionsCsv()">⬇ Download CSV</button>
         </div>
@@ -77,18 +76,16 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Submission</th>
+                        <th>Method</th>
                         <th>Problem</th>
                         <th>Type</th>
                         <th>Submitter</th>
-                        <th>Date</th>
+                        <th data-sort-default="desc" aria-sort="descending">Date</th>
                         <th style="text-align:right">Instances</th>
-                        <th style="text-align:right">Files</th>
-                        <th>Open</th>
                     </tr>
                 </thead>
                 <tbody id="sub-tbody">
-                    <tr><td colspan="8" class="loading">Loading submissions</td></tr>
+                    <tr><td colspan="6" class="loading">Loading submissions</td></tr>
                 </tbody>
             </table>
         </div>

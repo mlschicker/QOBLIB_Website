@@ -7,6 +7,7 @@
     <title>QOBLIB - Instances</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/qoblib-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/styles.css" />
 </head>
@@ -23,7 +24,7 @@
                 <a class="nl" data-nav="submit" href="submit.html">Submit</a>
             </div>
             <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">☾</button>
-            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank">GitHub ↗</a>
+            <a class="nav-gh" href="https://github.com/ZIB-AOPT/QOBLIB" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
     </nav>
 
@@ -32,6 +33,8 @@
             <h2>Instance Browser</h2>
             <p>Click any instance name for details, or use the download link to access the raw file on GitHub.</p>
         </div>
+
+        <hr class="section-divider" />
 
         <section class="tw chart-card" id="mip-chart-card">
             <div class="chart-head">
@@ -46,8 +49,10 @@
             </div>
         </section>
 
+        <hr class="section-divider" />
+
         <div class="filters">
-            <input type="text" class="fi-grow" id="i-search" placeholder="Search by name..." oninput="renderInstances()" />
+            <input type="text" class="fi-grow" id="i-search" placeholder="Search by instance..." oninput="renderInstances()" />
             <select id="i-prob" onchange="renderInstances()">
                 <option value="">All problem classes</option>
             </select>
@@ -57,11 +62,6 @@
                 <option value="best_known">Best known</option>
                 <option value="open">Open</option>
             </select>
-            <select id="i-sort" onchange="renderInstances()">
-                <option value="name">Name</option>
-                <option value="best_asc">Best objective ↑</option>
-                <option value="best_desc">Best objective ↓</option>
-            </select>
             <span class="fi-count" id="i-count"></span>
             <button class="btn btn-ghost btn-sm" type="button" id="i-download" onclick="downloadInstancesCsv()">⬇ Download CSV</button>
         </div>
@@ -70,7 +70,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Instance</th>
+                        <th data-sort-default="asc">Instance</th>
                         <th>Problem</th>
                         <th data-no-sort="true">Parameters</th>
                         <th style="text-align:right">Best objective</th>

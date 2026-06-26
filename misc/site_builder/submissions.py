@@ -57,7 +57,35 @@ COLUMN_MAP: dict[str, list[str]] = {
 }
 
 
-def read_csv_submissions_folder(submissions_dir: Path) -> dict:
+def _resolve_instance(col_instance: str, path_instance: str | None, known: set[str] | None) -> str:
+    """Pick the canonical instance name for a submission row.
+
+    The ``Problem`` column is authoritative whenever it already names a real
+    instance (the canonical case — true for ~all submissions). Otherwise fall
+    back to the instance encoded in the file path
+    (``<instance>/<instance>_summary.csv``); this rescues packages that put a
+    human-readable label in the column (e.g. ``LABS (N = 6)``) instead of the
+    instance id. A path like ``labs006-without_calibration`` (a run variant)
+    resolves to its base instance ``labs006`` — the longest known instance it
+    extends — so both runs attach to the real instance.
+    """
+    if known and col_instance and col_instance in known:
+        return col_instance
+    if path_instance and known:
+        if path_instance in known:
+            return path_instance
+        base = max(
+            (k for k in known
+             if path_instance == k or path_instance.startswith(f"{k}-") or path_instance.startswith(f"{k}_")),
+            key=len,
+            default=None,
+        )
+        if base:
+            return base
+    return col_instance or (path_instance or "")
+
+
+def read_csv_submissions_folder(submissions_dir: Path, known_instances: set[str] | None = None) -> dict:
     """
     Walk submissions_dir recursively.  Collects:
       • all *_summary.csv files anywhere in the tree
@@ -66,6 +94,10 @@ def read_csv_submissions_folder(submissions_dir: Path) -> dict:
     Returns {instance_name: [list_of_submission_dicts]}.
     Each dict has canonical keys matching the 27-column CSV standard plus
     '_source_dir' (the immediate subdirectory name, e.g. '20241222_Abs2_Schicker').
+
+    ``known_instances`` (the problem's real instance names) lets a row whose
+    ``Problem`` column is not a valid instance fall back to the instance encoded
+    in its ``<instance>/<instance>_summary.csv`` path (see _resolve_instance).
     """
     import csv as csvmod
 
@@ -91,13 +123,18 @@ def read_csv_submissions_folder(submissions_dir: Path) -> dict:
     for csv_file in sorted(csv_files):
         rel = csv_file.relative_to(submissions_dir)
         source_dir = rel.parts[0] if len(rel.parts) > 1 else csv_file.stem
+        # Instance encoded in the canonical "<instance>_summary.csv" filename,
+        # used when the row's "Problem" column does not name a real instance.
+        path_instance = (
+            csv_file.name[: -len("_summary.csv")] if csv_file.name.endswith("_summary.csv") else None
+        )
         try:
             with open(csv_file, newline="", encoding="utf-8", errors="replace") as fh:
                 reader = csvmod.DictReader(fh)
                 for raw in reader:
                     row = {(k or "").strip(): (v or "").strip()
                            for k, v in raw.items() if k}
-                    instance = get_col(row, "instance")
+                    instance = _resolve_instance(get_col(row, "instance"), path_instance, known_instances)
                     if not instance:
                         continue
                     val_str = get_col(row, "value")

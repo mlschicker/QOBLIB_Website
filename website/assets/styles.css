@@ -13,11 +13,12 @@
     --bg: #f7f7f4;
     --surface: #ffffff;
     --surface2: #eef3f1;
+    --row-alt: #f1f5f4;
     --border: #d8dedc;
     --border-mid: #c2ccca;
     --text: #1f2528;
     --muted: #5d6a70;
-    --faint: #8a9499;
+    --faint: #646b70;
     --accent: #1d6f78;
     --accent-d: #144d55;
     --accent-l: #e1efed;
@@ -47,6 +48,8 @@
     --bar-open-classical: #e6f0e8;
     --bar-solved-quantum: #9575cd;
     --bar-open-quantum: #ece6f7;
+    /* "reaches the best-known objective" star marker (leaderboard / instance tables) */
+    --star: #c79a3a;
     --bar-solved: #7fb48b;
     --bar-best-known: #8d90cc;
     --bar-open: #d6b06b;
@@ -174,6 +177,44 @@ nav {
     padding: 2.5rem 1.5rem 5rem;
 }
 
+/* Keyboard skip-to-content link (injected into every page by the build). Hidden
+   off-screen until focused, so it doesn't disturb the visual layout. */
+.skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 200;
+    padding: 0.5rem 0.9rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--r);
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+    top: 0.5rem;
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+/* Horizontal rule used to separate top-level page sections, replacing the
+   per-section top/bottom borders that used to live on .hero/.community/.callout. */
+.section-divider {
+    height: 1px;
+    border: 0;
+    background: var(--border);
+    margin: 2.5rem 0;
+}
+
+/* Every page separates top-level sections with .section-divider elements. The
+   shared .stats-bar drops its bottom margin on the home page (where a divider
+   follows it) so the gap above the divider doesn't double up. */
+body[data-nav="home"] .stats-bar {
+    margin-bottom: 0;
+}
+
 .loading {
     text-align: center;
     padding: 4rem 0;
@@ -210,9 +251,7 @@ nav {
 }
 
 .hero {
-    padding-bottom: 2.5rem;
-    margin-bottom: 2.5rem;
-    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
 }
 
 .hero-eyebrow {
@@ -285,15 +324,6 @@ nav {
     background: var(--accent-l);
 }
 
-.btn-accent {
-    background: var(--accent);
-    color: #fff;
-}
-
-.btn-accent:hover {
-    background: var(--accent-d);
-}
-
 .btn-sm {
     padding: 0.3rem 0.7rem;
     font-size: 0.78rem;
@@ -352,6 +382,9 @@ nav {
 
 .plot-card img {
     width: 100%;
+    /* height:auto so the width/height attributes (set for CLS) don't force a
+       fixed pixel height — aspect-ratio below controls the box. */
+    height: auto;
     display: block;
 }
 
@@ -362,6 +395,145 @@ nav {
     font-family: var(--serif);
     font-style: italic;
     border-top: 1px solid var(--border);
+}
+
+/* Home-page complexity-landscape figures: prebaked SVG scatter (main plot +
+   classical/quantum optimally-solved insets) injected by index.js from
+   data/landscape.json. Axes/grid reuse the .mip-* classes for theme-awareness.
+
+   The two plots sit in a 2-column grid; each card is a subgrid spanning the
+   shared rows (main · legend · insets · caption) so those sections line up
+   across both cards even when one legend is taller than the other. */
+.landscape-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto auto;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+}
+
+.landscape-card {
+    display: grid;
+    grid-row: 1 / -1;
+    grid-template-rows: subgrid;
+    row-gap: 0.35rem;
+    padding: 0.7rem 0.7rem 0;
+}
+
+.landscape-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    align-self: start;
+}
+
+.landscape-dot {
+    stroke-width: 0.5;
+}
+
+.ls-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.28rem 0.8rem;
+    padding: 0.3rem 0.1rem;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    color: var(--muted);
+}
+
+.ls-leg-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    white-space: nowrap;
+}
+
+.ls-leg-item strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.ls-leg-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.landscape-insets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem;
+    align-self: start;
+}
+
+.landscape-inset {
+    margin: 0;
+    min-width: 0;
+    /* Pin the scatter to the top of the cell so the two insets line up even when
+       one key wraps to more lines than the other (the key sits below the SVG). */
+    align-self: start;
+}
+
+.landscape-inset figcaption {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.5rem;
+    margin-top: 0.35rem;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+}
+
+.ls-inset-title {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.ls-inset-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.26rem;
+    white-space: nowrap;
+}
+
+.landscape-inset-svg {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+/* Caption is the last subgrid row; bleed it to the card edges with a top rule. */
+.landscape-card .plot-cap {
+    align-self: end;
+    margin: 0.2rem -0.7rem 0;
+}
+
+/* Phones: stack the two cards. Each card stays a grid but drops the shared
+   subgrid (no cross-card alignment needed once stacked) and flows its children
+   in a single column. Insets stack on the narrowest screens. */
+@media (max-width: 700px) {
+    .landscape-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+    }
+
+    .landscape-card {
+        grid-row: auto;
+        grid-template-rows: none;
+    }
+}
+
+@media (max-width: 560px) {
+    .landscape-insets {
+        grid-template-columns: 1fr;
+    }
 }
 
 .sh {
@@ -417,6 +589,12 @@ nav {
     border-color: var(--accent);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
+}
+
+/* The 0.08 black shadow is invisible on dark surfaces — deepen it so the hover
+   lift still reads in dark mode. */
+:root[data-theme="dark"] .pcard:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
 }
 
 .pcard:hover::before {
@@ -776,8 +954,8 @@ a.badge:hover {
 .mip-point:hover,
 .mip-point:focus-visible,
 .mip-point.active {
-    fill: #d57b2d;
-    stroke: #9a4e10;
+    fill: var(--warm);
+    stroke: var(--warm-d);
 }
 
 .mip-point:focus-visible {
@@ -905,17 +1083,25 @@ thead th {
     border-bottom: 1px solid var(--border);
 }
 
+/* Sortable headers are made focusable (tabindex) by enableTableSorting; give
+   keyboard users a clear focus ring matching the rest of the site. */
+thead th[tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
 tbody tr {
-    border-bottom: 1px solid var(--border);
     transition: background 0.1s;
 }
 
-tbody tr:last-child {
-    border-bottom: none;
+/* Alternating row shading carries the row separation, so per-row borders are
+   dropped. Odd rows keep the table surface; even rows take the subtle tint. */
+tbody tr:nth-child(even) {
+    background: var(--row-alt);
 }
 
 tbody tr:hover {
-    background: #fafaf7;
+    background: var(--accent-l);
 }
 
 td {
@@ -998,8 +1184,6 @@ td.num {
     gap: 2rem;
     align-items: start;
     margin-bottom: 2rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--border);
 }
 
 .d-num {
@@ -1131,6 +1315,159 @@ td.num {
 
 .d-desc-visual {
     margin-top: 0.25rem;
+    position: relative;
+}
+
+/* Hover/focus "Expand" affordance over a problem figure → opens the lightbox. */
+/* Any figure that gets an expand button becomes its positioning context. */
+.has-fig-expand {
+    position: relative;
+}
+
+.fig-expand {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    opacity: 0;
+    /* While invisible the button must not swallow clicks meant for the figure
+       (chart points, the legend, links beneath it). Like .toast, it stays
+       click-transparent until it is actually revealed. */
+    pointer-events: none;
+    transition: opacity 0.15s ease, color 0.15s, border-color 0.15s;
+}
+
+.has-fig-expand:hover .fig-expand,
+.fig-expand:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.fig-expand:hover {
+    color: var(--accent-d);
+    border-color: var(--accent);
+}
+
+/* Touch devices have no hover — keep the button discoverable and tappable. */
+@media (hover: none) {
+    .fig-expand {
+        pointer-events: auto;
+        opacity: 0.9;
+    }
+}
+
+/* Enlarged-figure overlay (shared, created once by problem.js). */
+.fig-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4vmin;
+    background: rgba(15, 20, 22, 0.66);
+    backdrop-filter: blur(3px);
+}
+
+.fig-lightbox[hidden] {
+    display: none;
+}
+
+.fig-lightbox-inner {
+    position: relative;
+    /* A definite width is required: our figures are viewBox-only SVGs with no
+       intrinsic pixel size, so `width:100%` on them needs a sized parent to fill
+       — without it they collapse to the ~300px SVG fallback and look tiny. */
+    width: min(1100px, 92vw);
+    max-height: 90vh;
+    overflow: auto;
+    padding: clamp(1rem, 4vmin, 2.5rem);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--rl);
+    box-shadow: var(--shadow);
+}
+
+.fig-lightbox-inner svg,
+.fig-lightbox-inner img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Cap tall figures by height; preserveAspectRatio (default "meet") keeps
+       them undistorted, just letterboxed within the box. */
+    max-height: 82vh;
+    border: none;
+    background: none;
+    padding: 0;
+}
+
+/* Expanded (lightbox) view of a home-page landscape card: show everything the
+   card shows — main scatter, legend, the two inset sub-plots with their titles,
+   and the caption — stacked and a little larger. */
+.landscape-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.landscape-expanded .landscape-main {
+    max-height: 62vh;
+}
+
+.landscape-expanded .ls-legend {
+    font-size: 0.74rem;
+    gap: 0.35rem 1rem;
+}
+
+.landscape-expanded .landscape-inset-svg {
+    /* Restore the inset framing the generic lightbox-svg rule above strips. */
+    background: var(--surface2);
+    border: 1px solid var(--border);
+}
+
+.landscape-expanded .landscape-inset figcaption {
+    font-size: 0.7rem;
+}
+
+.landscape-expanded .plot-cap {
+    border-top: none;
+    padding: 0.2rem 0 0;
+    font-size: 0.82rem;
+}
+
+.fig-lightbox-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    line-height: 1;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.fig-lightbox-close:hover {
+    color: var(--accent-d);
+    border-color: var(--accent);
 }
 
 .d-desc-visual img {
@@ -1327,13 +1664,43 @@ td.num {
 .resource-item summary {
     list-style: none;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.78rem;
     font-weight: 600;
     color: var(--accent);
+    transition: color 0.15s;
 }
 
 .resource-item summary::-webkit-details-marker {
     display: none;
+}
+
+/* Caret marking the model description as expandable; rotates down when open
+   (mirrors the .prob-section summary caret). */
+.resource-item summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+
+.resource-item details[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.resource-item summary:hover {
+    color: var(--accent-d);
+}
+
+.resource-item summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .resource-desc {
@@ -1471,6 +1838,20 @@ td.num {
     color: #8b6347;
 }
 
+/* Brighter medals on dark surfaces — the light-mode gold/silver/bronze are too
+   dark to read on the dark leaderboard (the silver #888 especially). */
+:root[data-theme="dark"] .r1 {
+    color: #e0b84a;
+}
+
+:root[data-theme="dark"] .r2 {
+    color: #b9c0c4;
+}
+
+:root[data-theme="dark"] .r3 {
+    color: #c2906a;
+}
+
 .notes-cell {
     font-size: 0.77rem;
     color: var(--muted);
@@ -1533,10 +1914,6 @@ td.num {
     .chart-head {
         flex-direction: column;
         gap: 0.45rem;
-    }
-
-    .perf-charts {
-        grid-template-columns: 1fr;
     }
 
     .mip-chart-wrap {
@@ -1604,10 +1981,10 @@ td.num {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 1.5rem;
-    margin: 0 0 4rem;
-    padding: 1.6rem 0;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
+    margin: 0;
+    padding: 0;
+    /* Separated from neighbours by .section-divider elements (like every other
+       top-level section), not its own borders — see index.html / leaderboard.html. */
 }
 
 .callout .hero-eyebrow {
@@ -1637,9 +2014,7 @@ td.num {
 
 /* ---- Community credit / participating organizations ---- */
 .community {
-    margin: 0 0 3rem;
-    padding: 0 0 2.6rem;
-    border-bottom: 1px solid var(--border);
+    padding: 0;
 }
 
 .community-head {
@@ -1664,20 +2039,52 @@ td.num {
     font-size: 0.95rem;
 }
 
+/* Auto-scrolling marquee of affiliation chips. The viewport clips the track
+   and fades both edges; the track holds two identical card groups and loops
+   by translating -50% (one group width). Pauses on hover/focus. */
 .community-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-    gap: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    padding: 0.4rem 0;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
+}
+
+.community-track {
+    display: flex;
+    width: max-content;
+    animation: community-scroll 70s linear infinite;
+}
+
+.community-grid:hover .community-track,
+.community-grid:focus-within .community-track {
+    animation-play-state: paused;
+}
+
+.community-group {
+    display: flex;
+    flex: 0 0 auto;
+}
+
+@keyframes community-scroll {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
 }
 
 .community-card {
-    min-width: 0;
-    min-height: 150px;
-    display: grid;
-    grid-template-rows: 64px minmax(0, 1fr);
-    align-items: stretch;
-    gap: 0.65rem;
-    padding: 0.85rem;
+    flex: 0 0 auto;
+    width: 210px;
+    min-height: 78px;
+    margin-right: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.85rem 1rem;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--rl);
@@ -1687,63 +2094,87 @@ td.num {
 a.community-card:hover {
     border-color: var(--accent);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+}
+
+:root[data-theme="dark"] a.community-card:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* Top row of a chip: either an affiliation logo (when configured) or the
+   institution name. Fixed-ish height keeps logo and text chips aligned in the
+   marquee. See assets/images/affiliations/README.md to add logos. */
+.community-card-media {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 40px;
 }
 
 .community-logo {
-    min-width: 0;
-    width: 100%;
-    height: 64px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    color: var(--accent-d);
-    font-family: var(--mono);
-    padding: 0.45rem;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    line-height: 1.15;
-    text-align: center;
-    overflow-wrap: anywhere;
-}
-
-.community-logo img {
-    display: block;
-    max-width: 80%;
-    max-height: 72%;
+    max-width: 100%;
+    max-height: 42px;
     object-fit: contain;
 }
 
-.community-card-copy {
-    display: grid;
-    align-content: start;
-    gap: 0.18rem;
-    min-width: 0;
+/* When a logo loads it stands in for the name; if it is missing or broken JS
+   adds `logo-failed` and the text name is restored. */
+.community-card-media.has-logo .community-name {
+    display: none;
 }
 
-.community-kind {
-    font-family: var(--mono);
-    font-size: 0.63rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--warm);
+.community-card-media.has-logo.logo-failed .community-logo {
+    display: none;
+}
+
+.community-card-media.has-logo.logo-failed .community-name {
+    display: -webkit-box;
 }
 
 .community-name {
     color: var(--navy);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .community-role {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     color: var(--muted);
     font-size: 0.75rem;
-    line-height: 1.42;
+    line-height: 1.3;
+}
+
+.community-role::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--warm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .community-grid {
+        overflow-x: auto;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .community-track {
+        animation: none;
+    }
+
+    .community-group[aria-hidden="true"] {
+        display: none;
+    }
 }
 
 /* ---- Complexity-landscape figures ---- */
@@ -1785,23 +2216,15 @@ a.community-card:hover {
         justify-content: flex-start;
     }
 
-    .community {
-        margin-bottom: 2.5rem;
-    }
-
     .community-head {
         grid-template-columns: 1fr;
         align-items: start;
         gap: 0.9rem;
     }
 
-    .community-grid {
-        grid-template-columns: 1fr;
-    }
-
     .community-card {
-        min-height: 142px;
-        padding: 0.85rem;
+        width: 180px;
+        margin-right: 0.6rem;
     }
 
     .site-footer {
@@ -1842,11 +2265,12 @@ a.community-card:hover {
     --bg: #14191b;
     --surface: #1b2225;
     --surface2: #232c30;
+    --row-alt: #1f282b;
     --border: #2e393d;
     --border-mid: #3d4a4f;
     --text: #e7eceb;
     --muted: #9fadb1;
-    --faint: #6f7d81;
+    --faint: #828f93;
     --accent: #3fa9b3;
     --accent-d: #74cdd6;
     --accent-l: #173533;
@@ -1872,6 +2296,7 @@ a.community-card:hover {
     --bar-best-known-classical: #ab8246;
     --bar-open-classical: #35473b;
     --bar-solved-quantum: #7c6aac;
+    --star: #d9b15a;
     --bar-open-quantum: #3a3349;
     --bar-solved: #5f9a6e;
     --bar-best-known: #6f72a8;
@@ -1898,10 +2323,6 @@ a.community-card:hover {
 
 :root[data-theme="dark"] .error-box {
     border-color: #6a3329;
-}
-
-:root[data-theme="dark"] tbody tr:hover {
-    background: var(--surface2);
 }
 
 /* Form controls: recolour the inline dropdown arrow for contrast. */
@@ -2024,9 +2445,63 @@ a.community-card:hover {
 
 .srow-head {
     display: grid;
-    grid-template-columns: 150px minmax(180px, 1.3fr) repeat(2, minmax(120px, 0.8fr));
+    /* Problem · Instance (widest, for the autocomplete) · Best objective.
+       Three columns for the three controls — no trailing empty column. */
+    grid-template-columns: 160px minmax(220px, 1.7fr) minmax(150px, 1fr);
     gap: 0.6rem;
     align-items: end;
+}
+
+/* Custom instance autocomplete (replaces the native <datalist>). */
+.ac {
+    position: relative;
+    display: block;
+}
+
+.ac > input {
+    width: 100%;
+}
+
+.ac-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    margin: 0;
+    padding: 0.25rem;
+    list-style: none;
+    max-height: 244px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--rl);
+    box-shadow: var(--shadow);
+}
+
+.ac-item {
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--r);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.ac-item.active,
+.ac-item:hover {
+    background: var(--accent-l);
+    color: var(--accent-d);
+}
+
+.ac-more {
+    padding: 0.4rem 0.55rem 0.25rem;
+    font-size: 0.72rem;
+    color: var(--faint);
+    list-style: none;
 }
 
 .srow-num {
@@ -2323,6 +2798,15 @@ textarea.invalid {
 /* Keep charts from ballooning in height on wide screens. */
 .perf-charts .conv-svg {
     max-height: 360px;
+}
+
+/* Stack the charts one per row on narrow screens. This override must follow the
+   base .perf-charts rule above: both have equal specificity, so source order is
+   what makes it win once the viewport is narrow. */
+@media (max-width: 900px) {
+    .perf-charts {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Segmented toggle (e.g. performance-plot grouping) */

@@ -3,6 +3,8 @@
 const {
     esc: qEsc,
     fmtNum: qFmtNum,
+    fmtInt: qFmtInt,
+    fmtMaybeNum: qFmtMaybeNum,
     fmtText: qFmtText,
     parseDate: qParseDate,
     fmtDate: qFmtDate,
@@ -17,6 +19,8 @@ const {
     initCommon: qInitCommon,
     classifySubmission: qClassify,
     SUBMISSION_CATEGORIES: qCATS,
+    setPageMeta: qSetPageMeta,
+    enhanceFigures: qEnhanceFigures,
 } = window.QOBLIB;
 
 // ---------------------------------------------------------------------------
@@ -254,6 +258,7 @@ async function initInstancePage() {
         if (!inst) {
             throw new Error(`Instance \"${instanceName}\" was not found in problem ${problemId}.`);
         }
+        qSetPageMeta({ title: `${inst.name} · ${p.name} — QOBLIB` });
 
         // Problem-specific metric rows (e.g. Nodes / Edges for MIS).
         const metricRows = (Array.isArray(p.columns) ? p.columns : [])
@@ -270,6 +275,10 @@ async function initInstancePage() {
             return Number(String(value).replace(/,/g, "").trim());
         };
         const parseMaybeDate = (value) => qParseDate(value);
+        // Canonical objective direction: treat an unspecified `minimize` as
+        // minimize, matching the convergence chart (instance.js makeSeries) so the
+        // ranking and the plot never disagree on which way is "better".
+        const minimize = p.minimize !== false;
         const isMarketSplit = String(p.id || "").padStart(2, "0") === "01";
         const isInfeasibleSubmission = (submission) => {
             const nFeasible = parseMaybeNumber(submission?.n_feasible);
@@ -285,7 +294,7 @@ async function initInstancePage() {
             const av = parseMaybeNumber(a.value);
             const bv = parseMaybeNumber(b.value);
             if (Number.isFinite(av) && Number.isFinite(bv) && av !== bv) {
-                return p.minimize ? av - bv : bv - av;
+                return minimize ? av - bv : bv - av;
             }
             if (Number.isFinite(av) !== Number.isFinite(bv)) {
                 return Number.isFinite(av) ? -1 : 1;
@@ -330,7 +339,7 @@ async function initInstancePage() {
         const feasibleSubmissions = submissions.filter((s) => !isInfeasibleSubmission(s));
         const submittedObjectives = feasibleSubmissions.map((s) => parseMaybeNumber(s.value)).filter((v) => Number.isFinite(v));
         const bestSubmittedObjective = submittedObjectives.length
-            ? (p.minimize ? Math.min(...submittedObjectives) : Math.max(...submittedObjectives))
+            ? (minimize ? Math.min(...submittedObjectives) : Math.max(...submittedObjectives))
             : Number.NaN;
         const hasBestKnownMatch = feasibleSubmissions.some((s) => isSameObjective(s.value, bestKnown));
         const markerObjective = hasBestKnownMatch ? bestKnown : bestSubmittedObjective;
@@ -361,7 +370,7 @@ async function initInstancePage() {
                     <div class="pcard-foot">
                         <a class="badge b-type" href="${qProblemUrl(p.id)}" title="Open the ${qEsc(p.name)} problem overview">${String(p.id).padStart(2, "0")} ${qEsc(p.name)}</a>
                         ${qStatusPill(inst.status)}
-                        ${inst.vars != null ? `<span class="badge b-vars">${Number(inst.vars).toLocaleString()} vars</span>` : ""}
+                        ${inst.vars != null ? `<span class="badge b-vars">${qFmtInt(inst.vars)} vars</span>` : ""}
                     </div>
                 </div>
                 <div class="d-meta">
@@ -374,8 +383,8 @@ async function initInstancePage() {
             </div>
 
             <div class="hero-actions" style="margin-bottom:1.5rem">
-                <a class="btn btn-ghost" href="${qEsc(inst.raw_url)}" target="_blank">Download Instance</a>
-                ${inst.reference_solution_url ? `<a class="btn btn-ghost" href="${qEsc(inst.reference_solution_url)}" target="_blank">Download Solution</a>` : ""}
+                ${inst.raw_url ? `<a class="btn btn-ghost" href="${qEsc(inst.raw_url)}" target="_blank" rel="noopener">Download Instance</a>` : ""}
+                ${inst.reference_solution_url ? `<a class="btn btn-ghost" href="${qEsc(inst.reference_solution_url)}" target="_blank" rel="noopener">Download Solution</a>` : ""}
             </div>
 
             ${renderSubmissionPlots(p, inst, submissions)}
@@ -397,7 +406,7 @@ async function initInstancePage() {
                                     <th>Approach</th>
                                     <th>Type</th>
                                     <th>Reference</th>
-                                    <th style="text-align:right">Runtime</th>
+                                    <th style="text-align:right">Runtime (s)</th>
                                     <th>Remarks</th>
                                 </tr>
                             </thead>
@@ -416,7 +425,7 @@ async function initInstancePage() {
                                                 <td>${qFmtText(s.modeling_approach || s.algorithm_type)}</td>
                                                 <td title="${qEsc((qCATS[catOf(s)] || qCATS.classical).label)}">${catBadge(catOf(s))}</td>
                                                 <td title="${qEsc(s.reference || "")}">${qFmtText(s.reference)}</td>
-                                                <td class="num">${qFmtText(s.runtime_total)}</td>
+                                                <td class="num">${qFmtMaybeNum(s.runtime_total)}</td>
                                                 <td title="${qEsc(s.remarks || s.workflow || s.hardware || "")}">${infeasible ? '<span class="badge b-tag">infeasible</span> ' : ""}${qFmtText(s.remarks || s.workflow || s.hardware)}</td>
                                             </tr>`;
                                         },
@@ -433,6 +442,7 @@ async function initInstancePage() {
 
         container.querySelectorAll(".resource-desc").forEach((el) => qRenderMath(el));
         qEnableTableSorting(container);
+        qEnhanceFigures(container); // expand affordance on the submission-history charts
     } catch (error) {
         qShowError(container, error.message);
     }

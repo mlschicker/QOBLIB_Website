@@ -16,12 +16,14 @@
 
     <out>/data/index.json                              — lightweight home-page payload
     <out>/data/leaderboard.json                        — aggregated submissions
+    <out>/data/instances.json                          — aggregated, trimmed instance list + MIP points
     <out>/data/problems/<id>/meta.json                 — per-problem metadata
     <out>/data/problems/<id>/instances.json            — per-problem instance list
     <out>/data/problems/<id>/solutions.json            — per-problem best-known values / statuses
     <out>/data/problems/<id>/submissions.json          — per-problem submission leaderboard entries
     <out>/data/problems/<id>/submission_groups.json    — per-package submission profiles
     <out>/data/problems/<id>/instance_submissions.json — per-instance detailed submissions
+    <out>/data/problems/<id>/charts.json                — pre-rendered performance-chart SVGs
 
 ``build_site`` copies the static frontend (HTML/CSS/JS from ``website/``) into
 the output directory and then writes the generated data into ``<out>/data``.
@@ -38,6 +40,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
+from .charts import build_problem_charts
+from .html_pages import enrich_site
+from .landscape import build_landscape
+from .metrics import build_mip_points
 from .problem import build_problem
 
 
@@ -61,6 +67,7 @@ def _index_problem_summary(data: dict) -> dict:
         "vars_max": data["vars_max"],
         "instance_count": data["instance_count"],
         "solved_count": data["solved_count"],
+        "solved_classical_count": data["solved_classical_count"],
         "best_known_count": data["best_known_count"],
         "open_count": data["open_count"],
         "quantum_solved_count": data["quantum_solved_count"],
@@ -71,19 +78,35 @@ def _index_problem_summary(data: dict) -> dict:
     }
 
 
-def _write_problem_chunks(problem_id: str, data: dict, problems_root: Path) -> tuple[list[dict], int]:
+# The only per-instance fields the Instances *list* page reads. The aggregate
+# data/instances.json carries just these (plus the MIP points) so the page makes
+# one trimmed request instead of fetching every problem's full instances.json.
+INSTANCE_LIST_FIELDS = (
+    "name", "status", "best_value", "bkv", "best_is_optimal",
+    "best_source_url", "best_source_label", "best_source_type", "raw_url", "metrics",
+)
+
+
+def _write_problem_chunks(problem_id: str, problem_dir: Path, data: dict, problems_root: Path) -> tuple[list[dict], int, dict]:
     """Split one problem payload into the per-file chunks and return its
-    (submissions, instance_count) for the global aggregates."""
+    (submissions, instance_count, instances_group) for the global aggregates."""
     chunk_dir = problems_root / problem_id
     chunk_dir.mkdir(parents=True, exist_ok=True)
 
     instances = data.pop("instances", [])
+
+    # Pre-compute the Instances-page MIP scatter from local metrics.csv files so
+    # the browser no longer fetches them from GitHub at runtime (see metrics.py).
+    mip_points = build_mip_points(problem_id, problem_dir, instances)
     submissions = data.pop("submissions", [])
     submission_groups = data.pop("submission_groups", [])
 
     # Detailed submissions used by instance pages (popped off each instance).
     submissions_by_instance: dict[str, list[dict]] = {}
     for inst in instances:
+        # Internal-only flag used by the landscape scatter (already collected by
+        # build_data before this point) — keep it out of the public instances.json.
+        inst.pop("quantum_optimal", None)
         inst_name = inst.get("name")
         if not inst_name:
             continue
@@ -101,18 +124,43 @@ def _write_problem_chunks(problem_id: str, data: dict, problems_root: Path) -> t
         if inst.get("name")
     ]
 
+    # Pre-render the performance charts once, here, instead of in every browser
+    # (see charts.py). Mirrors the `p` object the frontend assembles from the
+    # meta + instances + instance_submissions chunks.
+    charts = build_problem_charts({
+        "id": problem_id,
+        "minimize": data.get("minimize", True),
+        "columns": data.get("columns", []),
+        "instances": instances,
+        "instance_submissions": submissions_by_instance,
+    })
+
     _write_json(chunk_dir / "meta.json", data)
     _write_json(chunk_dir / "instances.json", {"problem_id": problem_id, "instances": instances})
     _write_json(chunk_dir / "submissions.json", {"problem_id": problem_id, "entries": submissions})
     _write_json(chunk_dir / "submission_groups.json", {"problem_id": problem_id, "entries": submission_groups})
     _write_json(chunk_dir / "solutions.json", {"problem_id": problem_id, "entries": solutions})
     _write_json(chunk_dir / "instance_submissions.json", {"problem_id": problem_id, "entries": submissions_by_instance})
+    _write_json(chunk_dir / "charts.json", {"problem_id": problem_id, "entries": charts})
+    _write_json(chunk_dir / "mip.json", {"problem_id": problem_id, "points": mip_points})
+
+    # Trimmed group for the aggregated Instances-list payload (data/instances.json).
+    instances_group = {
+        "id": problem_id,
+        "name": data.get("name", problem_id),
+        "columns": data.get("columns", []),
+        "instances": [
+            {k: inst[k] for k in INSTANCE_LIST_FIELDS if k in inst}
+            for inst in instances
+        ],
+        "points": mip_points,
+    }
 
     print(
         f"  → {chunk_dir} "
         f"({len(instances)} instances, {data['solved_count']} solved, {len(submissions)} submissions)"
     )
-    return submissions, data["instance_count"]
+    return submissions, data["instance_count"], instances_group
 
 
 def _remove_path(path: Path) -> None:
@@ -179,20 +227,57 @@ def build_data(out_dir: Path, built_at: str | None = None) -> dict:
 
     all_submissions: list[dict] = []
     index_problems: list[dict] = []
+    landscape_inputs: list[dict] = []
+    instances_groups: list[dict] = []
     total_instances = 0
 
     for problem_id, problem_dir in problem_dirs:
         print(f"Processing {problem_dir.name}…")
         data = build_problem(problem_id, problem_dir)
         index_problems.append(_index_problem_summary(data))
-        submissions, instance_count = _write_problem_chunks(problem_id, data, problems_root)
+        # Snapshot the per-instance fields the home-page landscape scatter needs,
+        # before _write_problem_chunks pops instances/flags off the payload.
+        landscape_inputs.append({
+            "problem_id": problem_id,
+            "problem_name": data["name"],
+            "problem_dir": problem_dir,
+            "instances": [
+                {
+                    "name": inst.get("name"),
+                    "is_optimal": bool(inst.get("best_is_optimal")),
+                    "best_known": inst.get("status") == "best_known",
+                    "quantum_optimal": bool(inst.get("quantum_optimal")),
+                    # Model filenames carry the authoritative metric stem (an
+                    # instance's name doesn't always match its model file, e.g.
+                    # Birkhoff B3_3_1 → bhS-03-001) — landscape.py joins on these.
+                    "models": [
+                        {"name": m.get("name"), "kind": m.get("kind")}
+                        for m in (inst.get("models") or [])
+                    ],
+                }
+                for inst in data.get("instances", [])
+            ],
+        })
+        submissions, instance_count, instances_group = _write_problem_chunks(problem_id, problem_dir, data, problems_root)
         all_submissions.extend(submissions)
+        instances_groups.append(instances_group)
         total_instances += instance_count
+
+    # Pre-render the home-page complexity-landscape scatter plots (MIP + QUBO)
+    # once, here, instead of shipping static PNGs (see landscape.py).
+    _write_json(data_root / "landscape.json", build_landscape(landscape_inputs))
+    print(f"→ {data_root / 'landscape.json'}")
 
     # Aggregated leaderboard: sort by problem, then instance, then value.
     all_submissions.sort(key=lambda s: (s.get("problem_id", ""), s.get("instance", ""), s.get("value") or 0))
     _write_json(data_root / "leaderboard.json", {"entries": all_submissions})
     print(f"\n→ {data_root / 'leaderboard.json'}  ({len(all_submissions)} submissions)")
+
+    # Aggregated, trimmed Instances-list payload: lets the Instances page load in
+    # a single request instead of fetching every problem's full instances.json +
+    # mip.json (was 1 + 2×N files).
+    _write_json(data_root / "instances.json", {"problems": instances_groups})
+    print(f"→ {data_root / 'instances.json'}  ({total_instances} instances)")
 
     built_at = built_at or datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     index = {
@@ -206,11 +291,7 @@ def build_data(out_dir: Path, built_at: str | None = None) -> dict:
     print(f"→ {data_root / 'index.json'}")
     print(f"\nDone. {len(problem_dirs)} problems, {total_instances} instances, {len(all_submissions)} submissions.")
 
-    return {
-        "problems": len(problem_dirs),
-        "instances": total_instances,
-        "submissions": len(all_submissions),
-    }
+    return index
 
 
 def copy_static_frontend(root: Path, out_dir: Path) -> None:
@@ -229,12 +310,14 @@ def build_site(
     ref: str = config.DEFAULT_REF,
     built_at: str | None = None,
     copy_static: bool = True,
+    base_url: str = config.DEFAULT_BASE_URL,
 ) -> dict:
     """Assemble the full static site under ``out``.
 
-    Configures the build context, copies the static frontend, and writes the
-    generated data. Returns a small summary dict (problem / instance / submission
-    counts).
+    Configures the build context, copies the static frontend, writes the
+    generated data, and (for full builds) enriches the HTML with SEO/social meta
+    and generates the pretty per-problem pages + sitemap. Returns a small summary
+    dict (problem / instance / submission counts).
     """
     root = Path(root)
     out = Path(out)
@@ -242,4 +325,11 @@ def build_site(
     clean_site_output(root, out, copy_static=copy_static)
     if copy_static:
         copy_static_frontend(root, out)
-    return build_data(out, built_at=built_at)
+    index = build_data(out, built_at=built_at)
+    if copy_static:
+        enrich_site(out, index["problems"], base_url)
+    return {
+        "problems": len(index["problems"]),
+        "instances": index["total_instances"],
+        "submissions": index["total_submissions"],
+    }
