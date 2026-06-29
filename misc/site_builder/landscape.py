@@ -20,9 +20,9 @@ module reproduces them as theme-aware SVG at build time, mirroring what
 Each figure has:
   • a main scatter, one point per instance, coloured by problem class (the colours
     mirror ``PROBLEM_COLORS`` in ``assets/instances.js`` — keep the two in sync), and
-  • two small insets re-plotting the same points, marking which instances are
-    optimally solved by CLASSICAL vs by QUANTUM submissions, in the same colours as
-    the problem-card progress bars (``var(--bar-solved-classical/quantum)``).
+  • two small insets re-plotting the same points, colouring each by how far
+    CLASSICAL vs QUANTUM methods got (optimal · best-known · found · open), in the
+    same four-tier ramps as the problem-card progress bars (``var(--bar-*)``).
 
 The main plot and both insets share one pair of log axes so point positions line
 up. ``num_vars`` / ``density`` come from the repository's generated
@@ -56,12 +56,32 @@ PROBLEM_COLORS = {
 }
 DEFAULT_COLOR = ("#1f6f6c", "#0e4f4d")
 
-# Inset status colours: theme variables, matching the problem-card progress bars.
-CLASSICAL_FILL = "var(--bar-solved-classical)"      # proven optimal
-BESTKNOWN_FILL = "var(--bar-best-known-classical)"  # best-known (not proven optimal)
-QUANTUM_FILL = "var(--bar-solved-quantum)"          # optimal by a quantum submission
+# Inset tier colours: theme variables, matching the problem-card progress bars so
+# the home page reads consistently. Each paradigm uses its own four-tier ramp:
+# optimal · best-known (matched the best value) · found (some feasible solution) ·
+# open. The "found" tier mirrors the bars' striped texture — on the tiny scatter
+# dots that means the light fill plus a darker ring (its optimal shade); the
+# legend swatch reuses the same diagonal stripe gradient as the bar legend.
+CLASSICAL_OPTIMAL_FILL = "var(--bar-solved-classical)"
+CLASSICAL_BESTKNOWN_FILL = "var(--bar-best-known-classical)"
+CLASSICAL_FOUND_FILL = "var(--bar-found-classical)"
+QUANTUM_OPTIMAL_FILL = "var(--bar-solved-quantum)"
+QUANTUM_BESTKNOWN_FILL = "var(--bar-best-known-quantum)"
+QUANTUM_FOUND_FILL = "var(--bar-found-quantum)"
 GREY_FILL = "var(--border-mid)"                     # open / not solved (legend swatch)
 UNSOLVED_STYLE = f"fill:{GREY_FILL};fill-opacity:0.5"
+
+# Scatter-dot styles per tier (optimal/best-known = solid; found = light fill with
+# a darker ring so the pale colour stays visible on the card).
+CLASSICAL_FOUND_DOT = f"fill:{CLASSICAL_FOUND_FILL};stroke:{CLASSICAL_OPTIMAL_FILL};stroke-width:0.8"
+QUANTUM_FOUND_DOT = f"fill:{QUANTUM_FOUND_FILL};stroke:{QUANTUM_OPTIMAL_FILL};stroke-width:0.8"
+# Striped legend swatches for the found tier (matches .bar-legend .swatch.found-*).
+CLASSICAL_FOUND_SWATCH = (
+    f"repeating-linear-gradient(45deg, {CLASSICAL_OPTIMAL_FILL} 0 3px, {CLASSICAL_FOUND_FILL} 3px 6px)"
+)
+QUANTUM_FOUND_SWATCH = (
+    f"repeating-linear-gradient(45deg, {QUANTUM_OPTIMAL_FILL} 0 3px, {QUANTUM_FOUND_FILL} 3px 6px)"
+)
 
 MAIN_DIMS = (720, 380)
 INSET_DIMS = (340, 220)
@@ -163,15 +183,24 @@ def _collect_points(entries, which: str) -> list[dict]:
             dens = _num(row.get("density"))
             if nv is None or dens is None or nv <= 0 or dens <= 0:
                 continue
+            # Per-paradigm tier (optimal·best_known·found·open). Fall back to the
+            # legacy boolean flags for older inputs that predate the tier fields.
+            ctier = inst.get("classical_tier")
+            if ctier is None:
+                ctier = "optimal" if inst.get("is_optimal") else (
+                    "best_known" if inst.get("best_known") else "open"
+                )
+            qtier = inst.get("quantum_tier")
+            if qtier is None:
+                qtier = "optimal" if inst.get("quantum_optimal") else "open"
             points.append({
                 "problem_id": entry["problem_id"],
                 "problem_name": entry["problem_name"],
                 "name": inst.get("name"),
                 "num_vars": nv,
                 "density": dens,
-                "is_optimal": bool(inst.get("is_optimal")),
-                "best_known": bool(inst.get("best_known")),
-                "quantum_optimal": bool(inst.get("quantum_optimal")),
+                "classical_tier": ctier,
+                "quantum_tier": qtier,
             })
 
     return points
@@ -276,18 +305,18 @@ def _main_style(p) -> str:
 
 
 def _inset_svg(points, scale, layers) -> str:
-    """Inset scatter. ``layers`` is an ordered list of (predicate, fill): points
+    """Inset scatter. ``layers`` is an ordered list of (predicate, style): points
     matching no layer are drawn grey first, then each layer paints on top."""
     def rank(p):
-        for i, (pred, _fill) in enumerate(layers):
+        for i, (pred, _style) in enumerate(layers):
             if pred(p):
                 return i + 1
         return 0
 
     def style_of(p):
-        for pred, fill in layers:
+        for pred, style in layers:
             if pred(p):
-                return f"fill:{fill}"
+                return style
         return UNSOLVED_STYLE
 
     ordered = sorted(points, key=rank)  # grey base first, highlighted layers on top
@@ -339,13 +368,17 @@ def _figure(points, caption) -> str:
         svg_class="landscape-svg landscape-main", with_labels=True,
         x_title="Number of variables (log)", y_title="Density (log)",
     )
-    # Classical track mirrors the problem-card classical bar: optimal · best-known · open.
+    # Both insets mirror the four-tier problem-card bars: optimal · best-known ·
+    # found · open (open = the grey base drawn for points matching no layer).
     classical = _inset_svg(points, scale, [
-        (lambda p: p["is_optimal"], CLASSICAL_FILL),
-        (lambda p: p["best_known"], BESTKNOWN_FILL),
+        (lambda p: p["classical_tier"] == "optimal", f"fill:{CLASSICAL_OPTIMAL_FILL}"),
+        (lambda p: p["classical_tier"] == "best_known", f"fill:{CLASSICAL_BESTKNOWN_FILL}"),
+        (lambda p: p["classical_tier"] == "found", CLASSICAL_FOUND_DOT),
     ])
     quantum = _inset_svg(points, scale, [
-        (lambda p: p["quantum_optimal"], QUANTUM_FILL),
+        (lambda p: p["quantum_tier"] == "optimal", f"fill:{QUANTUM_OPTIMAL_FILL}"),
+        (lambda p: p["quantum_tier"] == "best_known", f"fill:{QUANTUM_BESTKNOWN_FILL}"),
+        (lambda p: p["quantum_tier"] == "found", QUANTUM_FOUND_DOT),
     ])
     # Direct children of the card (no wrapping <figure>) so the cards can use a
     # CSS subgrid to align main / legend / insets / caption across both columns.
@@ -354,10 +387,12 @@ def _figure(points, caption) -> str:
         + _legend(points)
         + '<div class="landscape-insets">'
         + _inset_block(classical, "Classical", [
-            (CLASSICAL_FILL, "optimal"), (BESTKNOWN_FILL, "best-known"), (GREY_FILL, "open"),
+            (CLASSICAL_OPTIMAL_FILL, "optimal"), (CLASSICAL_BESTKNOWN_FILL, "best-known"),
+            (CLASSICAL_FOUND_SWATCH, "found"), (GREY_FILL, "open"),
         ])
         + _inset_block(quantum, "Quantum", [
-            (QUANTUM_FILL, "solved"), (GREY_FILL, "not solved"),
+            (QUANTUM_OPTIMAL_FILL, "optimal"), (QUANTUM_BESTKNOWN_FILL, "best-known"),
+            (QUANTUM_FOUND_SWATCH, "found"), (GREY_FILL, "open"),
         ])
         + '</div>'
         + f'<div class="plot-cap">{_esc(caption)}</div>'
@@ -365,10 +400,10 @@ def _figure(points, caption) -> str:
 
 
 _CAPTIONS = {
-    "mip": "Mixed Integer Programming formulations — variables vs. density, "
-           "with classical / quantum optimally-solved insets",
-    "qubo": "QUBO formulations — variables vs. density, "
-            "with classical / quantum optimally-solved insets",
+    "mip": "Mixed Integer Programming formulations — variables vs. density, with "
+           "classical / quantum insets (optimal · best-known · found · open)",
+    "qubo": "QUBO formulations — variables vs. density, with "
+            "classical / quantum insets (optimal · best-known · found · open)",
 }
 
 
@@ -376,8 +411,10 @@ def build_landscape(entries) -> dict:
     """Return prebaked figure HTML for the two home-page scatter plots.
 
     ``entries`` is a list of ``{problem_id, problem_name, problem_dir, instances}``
-    where each instance carries ``name`` plus the ``is_optimal`` / ``best_known`` /
-    ``quantum_optimal`` flags. Shape (consumed by ``renderLandscape`` in index.js)::
+    where each instance carries ``name`` plus the per-paradigm ``classical_tier`` /
+    ``quantum_tier`` (optimal·best_known·found·open; legacy ``is_optimal`` /
+    ``best_known`` / ``quantum_optimal`` booleans are accepted as a fallback).
+    Shape (consumed by ``renderLandscape`` in index.js)::
 
         {"mip": "<svg…><div…>…", "qubo": "…"}
 

@@ -105,13 +105,14 @@ def _entries(problem_dir: Path) -> list[dict]:
         "problem_name": "Test Problem",
         "problem_dir": problem_dir,
         "instances": [
-            {"name": "ms_1", "is_optimal": True, "best_known": False, "quantum_optimal": True,
+            {"name": "ms_1", "classical_tier": "optimal", "quantum_tier": "optimal",
              "models": [{"name": "ms_1.lp.xz", "kind": "lp"}, {"name": "ms_1.qs", "kind": "qs"}]},
             # Instance name (B1) differs from its model file stem (bhX-01) — the
             # join must follow the model file, like the instances-page scatter.
-            {"name": "B1", "is_optimal": False, "best_known": True, "quantum_optimal": False,
+            # Classical only matched best-known; quantum found a (worse) solution.
+            {"name": "B1", "classical_tier": "best_known", "quantum_tier": "found",
              "models": [{"name": "bhX-01.lp.xz", "kind": "lp"}]},
-            {"name": "zero", "is_optimal": True, "best_known": False, "quantum_optimal": False,
+            {"name": "zero", "classical_tier": "optimal", "quantum_tier": "open",
              "models": [{"name": "zero.lp", "kind": "lp"}]},
         ],
     }]
@@ -152,13 +153,18 @@ class TestBuildLandscape(unittest.TestCase):
         classical = _svgs(self.data["mip"])[1]
         self.assertIn("fill:var(--bar-solved-classical)", classical)      # ms_1 optimal
         self.assertIn("fill:var(--bar-best-known-classical)", classical)  # B1 best-known
-        # The colour key lists all three states.
+        # The colour key lists every tier.
         self.assertIn("best-known", self.data["mip"])
+        self.assertIn("found", self.data["mip"])
         self.assertIn("open", self.data["mip"])
 
-    def test_quantum_inset_marks_only_quantum_optimal(self):
+    def test_quantum_inset_uses_four_tier_ramp(self):
         quantum = _svgs(self.data["mip"])[2]
-        self.assertEqual(quantum.count("fill:var(--bar-solved-quantum)"), 1)  # only ms_1
+        self.assertEqual(quantum.count("fill:var(--bar-solved-quantum)"), 1)  # ms_1 optimal
+        self.assertIn("var(--bar-found-quantum)", quantum)                    # B1 found a solution
+        # The found dot carries a darker ring (its optimal shade) so the pale
+        # fill stays visible — mirroring the striped bar tier.
+        self.assertIn("stroke:var(--bar-solved-quantum)", quantum)
 
     def test_legend_lists_problem(self):
         self.assertIn("Test Problem", self.data["mip"])

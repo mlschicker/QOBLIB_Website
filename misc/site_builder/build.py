@@ -68,9 +68,13 @@ def _index_problem_summary(data: dict) -> dict:
         "instance_count": data["instance_count"],
         "solved_count": data["solved_count"],
         "solved_classical_count": data["solved_classical_count"],
+        "classical_best_known_count": data["classical_best_known_count"],
+        "classical_found_count": data["classical_found_count"],
         "best_known_count": data["best_known_count"],
         "open_count": data["open_count"],
         "quantum_solved_count": data["quantum_solved_count"],
+        "quantum_best_known_count": data["quantum_best_known_count"],
+        "quantum_found_count": data["quantum_found_count"],
         "quantum_hw_solved_count": data["quantum_hw_solved_count"],
         "quantum_sim_solved_count": data["quantum_sim_solved_count"],
         "github_url": data["github_url"],
@@ -104,9 +108,11 @@ def _write_problem_chunks(problem_id: str, problem_dir: Path, data: dict, proble
     # Detailed submissions used by instance pages (popped off each instance).
     submissions_by_instance: dict[str, list[dict]] = {}
     for inst in instances:
-        # Internal-only flag used by the landscape scatter (already collected by
-        # build_data before this point) — keep it out of the public instances.json.
+        # Internal-only flags used by the landscape scatter (already collected by
+        # build_data before this point) — keep them out of the public instances.json.
         inst.pop("quantum_optimal", None)
+        inst.pop("_classical_tier", None)
+        inst.pop("_quantum_tier", None)
         inst_name = inst.get("name")
         if not inst_name:
             continue
@@ -247,6 +253,10 @@ def build_data(out_dir: Path, built_at: str | None = None) -> dict:
                     "is_optimal": bool(inst.get("best_is_optimal")),
                     "best_known": inst.get("status") == "best_known",
                     "quantum_optimal": bool(inst.get("quantum_optimal")),
+                    # Per-paradigm tier (optimal · best_known · found · open) that
+                    # the landscape insets colour by, mirroring the problem-card bars.
+                    "classical_tier": inst.get("_classical_tier"),
+                    "quantum_tier": inst.get("_quantum_tier"),
                     # Model filenames carry the authoritative metric stem (an
                     # instance's name doesn't always match its model file, e.g.
                     # Birkhoff B3_3_1 → bhS-03-001) — landscape.py joins on these.

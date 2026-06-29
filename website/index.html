@@ -102,11 +102,20 @@
                 <a class="sh-link" href="problems.html">View all problem classes →</a>
             </div>
             <div class="bar-legend">
-                <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-classical)"></span>Solved (optimal)</span>
-                <span class="legend-item"><span class="swatch" style="background:var(--bar-best-known-classical)"></span>Best known</span>
-                <span class="legend-item"><span class="swatch" style="background:var(--bar-open-classical)"></span>Open</span>
-                <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-quantum)"></span>Solved by quantum</span>
-                <span class="legend-item"><span class="swatch" style="background:var(--bar-open-quantum)"></span>Not solved by quantum</span>
+                <div class="legend-row">
+                    <span class="legend-label">Classical</span>
+                    <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-classical)"></span>Solved (optimal)</span>
+                    <span class="legend-item"><span class="swatch" style="background:var(--bar-best-known-classical)"></span>Matches best-known</span>
+                    <span class="legend-item"><span class="swatch found-classical"></span>Found a solution</span>
+                    <span class="legend-item"><span class="swatch" style="background:var(--bar-open-classical)"></span>Open</span>
+                </div>
+                <div class="legend-row">
+                    <span class="legend-label">Quantum</span>
+                    <span class="legend-item"><span class="swatch" style="background:var(--bar-solved-quantum)"></span>Solved (optimal)</span>
+                    <span class="legend-item"><span class="swatch" style="background:var(--bar-best-known-quantum)"></span>Matches best-known</span>
+                    <span class="legend-item"><span class="swatch found-quantum"></span>Found a solution</span>
+                    <span class="legend-item"><span class="swatch" style="background:var(--bar-open-quantum)"></span>Open</span>
+                </div>
             </div>
             <div class="pgrid" id="pgrid">
                 <div class="loading">Loading problem data</div>

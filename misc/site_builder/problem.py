@@ -126,6 +126,22 @@ def _collect_instances(problem_id: str, problem_dir: Path, bkv_map: dict,
     return instances
 
 
+def _paradigm_status(optimal_reached: bool, para_best, best_value, minimize: bool) -> str:
+    """Classify how far one compute paradigm got on an instance, for the
+    four-segment progress bars: ``optimal`` (proven) · ``best_known`` (matched
+    the best value, optimality unproven) · ``found`` (some feasible solution,
+    worse than the best value) · ``open`` (nothing feasible)."""
+    if optimal_reached:
+        return "optimal"
+    if not isinstance(para_best, (int, float)):
+        return "open"
+    if isinstance(best_value, (int, float)):
+        tol = 1e-6 * max(1.0, abs(float(best_value)))
+        if abs(float(para_best) - float(best_value)) <= tol:
+            return "best_known"
+    return "found"
+
+
 def _resolve_best_values(problem_dir: Path, meta: dict, instances: list[dict],
                          bkv_map: dict, csv_subs: dict) -> tuple[set, set, set]:
     """Annotate each instance with its best value + source, and report which
@@ -228,6 +244,25 @@ def _resolve_best_values(problem_dir: Path, meta: dict, instances: list[dict],
             inst["best_source_type"] = best_source_type
         if best_source_url:
             inst["best_source_url"] = best_source_url
+
+        # Best feasible objective each paradigm achieved on this instance. Powers
+        # the four-segment progress bars, which split "matched the best-known
+        # value" from "found some (worse) feasible solution". The repository
+        # reference solution counts as a classical result.
+        classical_vals: list[float] = []
+        quantum_vals: list[float] = []
+        if isinstance(inst.get("reference_solution_value"), (int, float)):
+            classical_vals.append(float(inst["reference_solution_value"]))
+        for sub in inst_subs:
+            sv = sub.get("value")
+            if not isinstance(sv, (int, float)):
+                continue
+            cat = sub.get("category") or classify_submission(sub)
+            target = quantum_vals if cat in ("quantum_hw", "quantum_sim") else classical_vals
+            target.append(float(sv))
+        pick = min if meta.get("minimize", True) else max
+        inst["_classical_best"] = pick(classical_vals) if classical_vals else None
+        inst["_quantum_best"] = pick(quantum_vals) if quantum_vals else None
 
         # A feasible submission can establish status even when no reference
         # solution carries an explicit optimal/best-known marker — e.g. Portfolio,
@@ -375,8 +410,36 @@ def build_problem(problem_id: str, problem_dir: Path) -> dict:
     # the quantum progress bar. Consumed by the home-page landscape scatter
     # (landscape.py via build.py); stripped before instances.json is written.
     quantum_optimal_names = solved_hw | solved_sim
+    minimize = meta.get("minimize", True)
+    # Four-segment progress-bar counts per paradigm: optimal · best-known
+    # (matched the best value) · found (some feasible, worse) · open (rest).
+    classical_best_known = classical_found = 0
+    quantum_best_known = quantum_found = 0
     for inst in instances:
-        inst["quantum_optimal"] = inst.get("name") in quantum_optimal_names
+        name = inst.get("name")
+        inst["quantum_optimal"] = name in quantum_optimal_names
+        is_optimal = inst.get("status") in ("optimal", "solved")
+        classical_optimal = is_optimal and (
+            name in solved_classical_sub
+            or inst.get("reference_solution_url")
+            or isinstance(inst.get("reference_solution_value"), (int, float))
+        )
+        best_value = inst.get("best_value")
+        cstat = _paradigm_status(classical_optimal, inst.pop("_classical_best", None), best_value, minimize)
+        qstat = _paradigm_status(inst["quantum_optimal"], inst.pop("_quantum_best", None), best_value, minimize)
+        # Per-paradigm tier, mirroring the four-segment progress bars. Consumed by
+        # the home-page landscape insets (via build.py); stripped before
+        # instances.json is written.
+        inst["_classical_tier"] = cstat
+        inst["_quantum_tier"] = qstat
+        if cstat == "best_known":
+            classical_best_known += 1
+        elif cstat == "found":
+            classical_found += 1
+        if qstat == "best_known":
+            quantum_best_known += 1
+        elif qstat == "found":
+            quantum_found += 1
 
     # Collect all submissions as leaderboard-format entries.
     submissions: list[dict] = []
@@ -440,9 +503,13 @@ def build_problem(problem_id: str, problem_dir: Path) -> dict:
         "instance_count": len(instances),
         "solved_count": n_solved,
         "solved_classical_count": n_classical_solved,
+        "classical_best_known_count": classical_best_known,
+        "classical_found_count": classical_found,
         "best_known_count": n_best_known,
         "open_count": n_open,
         "quantum_solved_count": n_quantum_solved,
+        "quantum_best_known_count": quantum_best_known,
+        "quantum_found_count": quantum_found,
         "quantum_hw_solved_count": n_quantum_hw_solved,
         "quantum_sim_solved_count": n_quantum_sim_solved,
         "instances": instances,
