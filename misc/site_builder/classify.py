@@ -44,8 +44,26 @@ _REAL_HW_RE = re.compile(
 )
 
 
+# Explicit "Paradigm" column values (controlled vocabulary in the submission
+# template) → canonical category. When a submitter declares the paradigm we trust
+# it over the heuristics below; the regexes only fire when this column is absent.
+_PARADIGM_MAP = {
+    "classical": "classical",
+    "quantum hardware": "quantum_hw",
+    "quantum simulator": "quantum_sim",
+}
+
+
 def classify_submission(sub: dict) -> str:
-    """Return 'quantum_hw', 'quantum_sim', or 'classical' for a submission row."""
+    """Return 'quantum_hw', 'quantum_sim', or 'classical' for a submission row.
+
+    Prefer the submitter-declared ``Paradigm`` column when it carries a known
+    value; otherwise fall back to inferring from the algorithm/hardware text.
+    """
+    declared = _PARADIGM_MAP.get(str(sub.get("paradigm") or "").strip().lower())
+    if declared:
+        return declared
+
     qpu = num_or_none(sub.get("runtime_qpu"))
     hw = str(sub.get("hardware") or "")
     wf = str(sub.get("workflow") or "")

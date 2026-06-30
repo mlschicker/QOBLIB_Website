@@ -12,7 +12,7 @@
 # limitations under the License.
 """Submission reader.
 
-Walks each problem's ``submissions/`` tree and parses the canonical 27-column
+Walks each problem's ``submissions/`` tree and parses the canonical 30-column
 ``*_summary.csv`` files into per-instance submission rows, mapping the verbose
 CSV headers to terse canonical keys. CSV is the only supported submission format.
 """
@@ -30,6 +30,7 @@ from .text import parse_date_str
 COLUMN_MAP: dict[str, list[str]] = {
     "instance":          ["Problem", "Problem Identifier", "Instance"],
     "submitter":         ["Submitter"],
+    "affiliation":       ["Affiliation"],
     "date":              ["Date"],
     "reference":         ["Reference"],
     "value":             ["Best Objective Value"],
@@ -43,12 +44,14 @@ COLUMN_MAP: dict[str, list[str]] = {
     "coefficients_type": ["Coefficients Type"],
     "workflow":          ["Workflow"],
     "algorithm_type":    ["Algorithm Type"],
+    "paradigm":          ["Paradigm"],
     "n_runs":            ["# Runs"],
     "n_feasible":        ["# Feasible Runs"],
     "n_successful":      ["# Successful Runs"],
     "success_threshold": ["Success Threshold"],
     "hardware":          ["Hardware Specifications"],
     "runtime_total":     ["Total Runtime"],
+    "time_to_solution":  ["Time to Solution"],
     "runtime_cpu":       ["CPU Runtime"],
     "runtime_gpu":       ["GPU Runtime"],
     "runtime_qpu":       ["QPU Runtime"],
@@ -92,7 +95,7 @@ def read_csv_submissions_folder(submissions_dir: Path, known_instances: set[str]
       • any *.csv files that are direct children of submissions_dir
 
     Returns {instance_name: [list_of_submission_dicts]}.
-    Each dict has canonical keys matching the 27-column CSV standard plus
+    Each dict has canonical keys matching the 30-column CSV standard plus
     '_source_dir' (the immediate subdirectory name, e.g. '20241222_Abs2_Schicker').
 
     ``known_instances`` (the problem's real instance names) lets a row whose

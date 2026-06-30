@@ -11,13 +11,13 @@ const {
 
 const REPO = "ZIB-AOPT/QOBLIB";
 
-// Canonical 27-column header — MUST match misc/check_submission.py REQUIRED_COLUMNS exactly.
+// Canonical 30-column header — MUST match misc/check_submission.py REQUIRED_COLUMNS exactly.
 const CSV_COLUMNS = [
-    "Problem", "Submitter", "Date", "Reference", "Best Objective Value", "Optimality Bound", "Modeling Approach",
-    "# Decision Variables", "# Binary Variables", "# Integer Variables", "# Continuous Variables",
-    "# Non-Zero Coefficients", "Coefficients Type", "Coefficients Range", "Workflow", "Algorithm Type",
+    "Problem", "Submitter", "Affiliation", "Date", "Reference", "Best Objective Value", "Optimality Bound",
+    "Modeling Approach", "# Decision Variables", "# Binary Variables", "# Integer Variables", "# Continuous Variables",
+    "# Non-Zero Coefficients", "Coefficients Type", "Coefficients Range", "Workflow", "Algorithm Type", "Paradigm",
     "# Runs", "# Feasible Runs", "# Successful Runs", "Success Threshold", "Hardware Specifications",
-    "Total Runtime", "CPU Runtime", "GPU Runtime", "QPU Runtime", "Other HW Runtime", "Remarks",
+    "Total Runtime", "Time to Solution", "CPU Runtime", "GPU Runtime", "QPU Runtime", "Other HW Runtime", "Remarks",
 ];
 
 const INT_COLUMNS = new Set([
@@ -26,17 +26,19 @@ const INT_COLUMNS = new Set([
 ]);
 const FLOAT_COLUMNS = new Set([
     "Best Objective Value", "Optimality Bound", "Success Threshold",
-    "Total Runtime", "CPU Runtime", "GPU Runtime", "QPU Runtime", "Other HW Runtime",
+    "Total Runtime", "Time to Solution", "CPU Runtime", "GPU Runtime", "QPU Runtime", "Other HW Runtime",
 ]);
 
 // Fields entered once for the whole package (CSV column -> input spec).
 const SHARED_FIELDS = [
-    { col: "Submitter", label: "Submitter & affiliation", required: true, placeholder: "Ada Lovelace, Example Lab" },
+    { col: "Submitter", label: "Submitter(s)", required: true, placeholder: "Ada Lovelace, Alan Turing" },
+    { col: "Affiliation", label: "Affiliation(s)", required: true, placeholder: "Example Lab, Example University", hint: "One per author, in the same order (repeat shared affiliations)." },
     { col: "Date", label: "Date", type: "date", required: true },
     { col: "Reference", label: "Reference (paper / repo URL)", placeholder: "https://arxiv.org/abs/..." },
     { col: "Modeling Approach", label: "Modeling approach", required: true, placeholder: "QUBO, ILP, ..." },
     { col: "Coefficients Type", label: "Coefficients type", required: true, placeholder: "integer / continuous" },
     { col: "Algorithm Type", label: "Algorithm type", required: true, type: "select", options: ["", "Deterministic", "Stochastic"] },
+    { col: "Paradigm", label: "Paradigm", required: true, type: "select", options: ["", "Classical", "Quantum Hardware", "Quantum Simulator"] },
     { col: "Workflow", label: "Workflow", required: true, type: "textarea", placeholder: "pre-processing → solver → post-processing" },
     { col: "Hardware Specifications", label: "Hardware specifications", required: true, type: "textarea", placeholder: "IBM Eagle r3 (127 qubits); 1× A100; ..." },
     { col: "__team", label: "Team / folder tag", placeholder: "MyTeam — used in the submission folder name" },
@@ -58,6 +60,7 @@ const ROW_FIELDS = [
     { col: "# Successful Runs", label: "# Successful runs", required: true, placeholder: "number or N/A" },
     { col: "Success Threshold", label: "Success threshold ε", required: true, placeholder: "number or N/A" },
     { col: "Total Runtime", label: "Total runtime (s)", required: true, placeholder: "seconds or N/A" },
+    { col: "Time to Solution", label: "Time to solution (s)", required: true, placeholder: "seconds or N/A" },
     { col: "CPU Runtime", label: "CPU runtime (s)", required: true, placeholder: "seconds or N/A" },
     { col: "GPU Runtime", label: "GPU runtime (s)", required: true, placeholder: "seconds or N/A" },
     { col: "QPU Runtime", label: "QPU runtime (s)", required: true, placeholder: "seconds or N/A" },
@@ -140,9 +143,11 @@ function renderShared() {
     grid.innerHTML = SHARED_FIELDS.map((f) => {
         const full = f.type === "textarea" ? " ff-full" : "";
         const id = colId("sf", f.col);
+        const hint = f.hint ? `<small class="ff-hint">${qEsc(f.hint)}</small>` : "";
         return `<div class="ff${full}">
             <label for="${id}">${qEsc(f.label)}${f.required ? "" : ' <span class="opt">(optional)</span>'}</label>
             ${fieldInput(f, shared[f.col] || "", "onSharedInput(this)", id)}
+            ${hint}
         </div>`;
     }).join("");
 }
@@ -553,6 +558,7 @@ function clearInvalidMarks() {
 // to *render* them (only after the user presses "Check submission").
 function computeValidation() {
     const shErrors = [];
+    const shWarns = [];
     const shInvalid = new Set();
     SHARED_FIELDS.forEach((f) => {
         if (!f.required) return;
@@ -566,6 +572,13 @@ function computeValidation() {
         }
         if (invalid) shInvalid.add(f.col);
     });
+    // Multiple authors need one affiliation each, in the same order (mirrors the
+    // authoritative checker's warning in misc/check_submission.py).
+    const submitters = String(shared["Submitter"] || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const affiliations = String(shared["Affiliation"] || "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (submitters.length > 1 && affiliations.length !== submitters.length) {
+        shWarns.push(`${submitters.length} author(s) in Submitter but ${affiliations.length} in Affiliation — provide one affiliation per author, in the same order (repeat shared affiliations).`);
+    }
     if (!rows.length) shErrors.push("Add at least one result row.");
 
     const seen = new Map();
@@ -583,12 +596,12 @@ function computeValidation() {
     });
 
     const totalErr = shErrors.length + rowResults.reduce((a, x) => a + x.res.errors.length, 0);
-    const totalWarn = rowResults.reduce((a, x) => a + x.res.warns.length, 0);
-    return { shErrors, shInvalid, rowResults, totalErr, totalWarn };
+    const totalWarn = shWarns.length + rowResults.reduce((a, x) => a + x.res.warns.length, 0);
+    return { shErrors, shWarns, shInvalid, rowResults, totalErr, totalWarn };
 }
 
 function validateAll() {
-    const { shErrors, shInvalid, rowResults, totalErr, totalWarn } = computeValidation();
+    const { shErrors, shWarns, shInvalid, rowResults, totalErr, totalWarn } = computeValidation();
     const summary = document.getElementById("val-summary");
     const valList = document.getElementById("val-list");
 
@@ -608,8 +621,11 @@ function validateAll() {
     });
 
     const blocks = [];
-    if (shErrors.length) {
-        blocks.push(`<div class="vblock"><div class="vb-head">Shared details</div>${shErrors.map((m) => `<div class="vmsg verr">✕ ${qEsc(m)}</div>`).join("")}</div>`);
+    if (shErrors.length || shWarns.length) {
+        blocks.push(`<div class="vblock"><div class="vb-head">Shared details</div>${
+            shErrors.map((m) => `<div class="vmsg verr">✕ ${qEsc(m)}</div>`).join("") +
+            shWarns.map((m) => `<div class="vmsg vwarn">⚠ ${qEsc(m)}</div>`).join("")
+        }</div>`);
     }
 
     rowResults.forEach(({ r, res }) => {

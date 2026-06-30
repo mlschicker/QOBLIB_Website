@@ -270,8 +270,20 @@ const SUBMISSION_CATEGORIES = {
     classical: { label: "Classical", short: "Classical", color: "var(--cat-classical)" },
 };
 
+// Explicit "Paradigm" column values → canonical category. Mirrors _PARADIGM_MAP
+// in misc/site_builder/classify.py — keep the two in sync.
+const PARADIGM_MAP = {
+    classical: "classical",
+    "quantum hardware": "quantum_hw",
+    "quantum simulator": "quantum_sim",
+};
+
 function classifySubmission(s) {
     if (!s) return "classical";
+    // Trust the submitter-declared paradigm when present; otherwise infer below.
+    const declared = PARADIGM_MAP[String(s.paradigm || "").trim().toLowerCase()];
+    if (declared) return declared;
+
     const numv = (v) => (v == null || v === "" ? NaN : Number(String(v).replace(/,/g, "").trim()));
     const qpu = numv(s.runtime_qpu);
     const hw = String(s.hardware || "").toLowerCase();

@@ -59,9 +59,10 @@ def _submission_proves_optimal(sub: dict) -> bool:
 # Package-level metadata kept only when it is consistent across every row in a
 # submission package (instance-specific counts are rendered in the table).
 PROFILE_KEYS = [
-    "submitter", "date", "reference", "modeling_approach", "algorithm_type",
-    "workflow", "hardware", "runtime_total", "runtime_cpu", "runtime_gpu",
-    "runtime_qpu", "runtime_other", "n_runs", "n_feasible", "n_successful",
+    "submitter", "affiliation", "date", "reference", "modeling_approach",
+    "algorithm_type", "paradigm", "workflow", "hardware", "runtime_total",
+    "time_to_solution", "runtime_cpu", "runtime_gpu", "runtime_qpu",
+    "runtime_other", "n_runs", "n_feasible", "n_successful",
     "success_threshold", "coefficients_type", "n_vars", "n_binary",
     "n_integer", "n_continuous", "n_nonzero", "optimality_bound", "remarks",
 ]

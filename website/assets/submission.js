@@ -30,10 +30,12 @@ function fileDisplayName(path) {
 
 const PROFILE_FIELDS = [
     ["Submitter", "submitter"],
+    ["Affiliation", "affiliation"],
     ["Date", "date"],
     ["Reference", "reference"],
     ["Modeling approach", "modeling_approach"],
     ["Algorithm type", "algorithm_type"],
+    ["Paradigm", "paradigm"],
     ["Workflow", "workflow"],
     ["Hardware", "hardware"],
     ["Success threshold", "success_threshold"],
@@ -156,6 +158,7 @@ async function initSubmissionPage() {
                         <th style="text-align:right">Objective</th>
                         <th style="text-align:right">Optimality Bound</th>
                         <th style="text-align:right">Runtime (s)</th>
+                        <th style="text-align:right">Time to Sol. (s)</th>
                         <th style="text-align:right">CPU (s)</th>
                         <th style="text-align:right">GPU (s)</th>
                         <th>Hardware</th>
@@ -173,6 +176,7 @@ async function initSubmissionPage() {
                                     <td class="num" style="font-weight:600">${fmtMaybeNum(row.value)}</td>
                                     <td class="num">${fmtMaybeNum(row.optimality_bound)}</td>
                                     <td class="num">${fmtMaybeNum(csvRow.runtime_total)}</td>
+                                    <td class="num">${fmtMaybeNum(csvRow.time_to_solution)}</td>
                                     <td class="num">${fmtMaybeNum(csvRow.runtime_cpu)}</td>
                                     <td class="num">${fmtMaybeNum(csvRow.runtime_gpu)}</td>
                                     <td class="mono">${qEsc(csvRow.hardware || "")}</td>
