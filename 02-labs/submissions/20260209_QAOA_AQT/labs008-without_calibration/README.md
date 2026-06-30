@@ -5,7 +5,8 @@ This directory contains the submission for the problem **labs008-without_calibra
 | Field | Value 1 |
 | --- | --- |
 | Problem | LABS (N = 8) |
-| Submitter | Angelika Widl (Math.Tec), Daniel Egger (IBM), Juris Ulmanis (AQT), Christoph Regner (Math.Tec) |
+| Submitter | Angelika Widl, Daniel Egger, Juris Ulmanis, Christoph Regner |
+| Affiliation | Math.Tec, IBM, AQT, Math.Tec |
 | Date | Nov. 17, 2025 |
 | ====== |  |
 | Reference | N/A |
@@ -23,6 +24,7 @@ This directory contains the submission for the problem **labs008-without_calibra
 | ====== |  |
 | Workflow | QAOA with p = 1 (200 shots per run) |
 | Algorithm Type | stochastic |
+| Paradigm | Quantum Hardware |
 | # Runs | 25 |
 | # Feasible Runs | 25 |
 | # Successful Runs | 25 |
@@ -31,6 +33,7 @@ This directory contains the submission for the problem **labs008-without_calibra
 | Hardware Specifications | CPU: HPC University of Innsbruck (Leo 5), QPU: AQT IBEX |
 | ====== |  |
 | Total Runtime | 648.782 |
+| Time to Solution | N/A |
 | CPU Runtime | 0.03295 |
 | GPU Runtime | N/A |
 | QPU Runtime | 641.974 |

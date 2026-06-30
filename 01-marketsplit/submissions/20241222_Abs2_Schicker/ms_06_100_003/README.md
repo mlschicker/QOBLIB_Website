@@ -2,19 +2,17 @@
 
 This directory contains the submission for the problem **ms_06_100_003**.
 
-## CSV Summary
-
-| Field | Value |
-|-------|-------|
+| Field | Value 1 |
+| --- | --- |
 | Problem | ms_06_100_003 |
 | Submitter | Maximilian Schicker |
+| Affiliation | Zuse Institute Berlin |
 | Date | 22. Dec. 2024 |
-|======||
+| ====== |  |
 | Reference | See Models Directory using abs2 |
-|======||
 | Best Objective Value | 1 |
 | Optimality Bound | N/A |
-|======||
+| ====== |  |
 | Modeling Approach | QUBO |
 | # Decision Variables | 50 |
 | # Binary Variables | 50 |
@@ -23,20 +21,22 @@ This directory contains the submission for the problem **ms_06_100_003**.
 | # Non-Zero Coefficients | 2450 |
 | Coefficients Type | Integer |
 | Coefficients Range | N/A - N/A |
-|======||
+| ====== |  |
 | Workflow | Generate QS files using ZIMPL, solve using abs2 |
 | Algorithm Type | Deterministic |
+| Paradigm | Classical |
 | # Runs | 1 |
 | # Feasible Runs | 1 |
 | # Successful Runs | 0 |
 | Success Threshold | N/A |
-|======||
+| ====== |  |
 | Hardware Specifications | Four NVIDIA Tesla V100-SXM2-16GB: CUDA 12.2 |
-|======||
+| ====== |  |
 | Total Runtime | 600.103222 |
+| Time to Solution | 319.73 |
 | CPU Runtime | N/A |
 | GPU Runtime | 319.730265 |
 | QPU Runtime | N/A |
 | Other HW Runtime | N/A |
-|======||
+| ====== |  |
 | Remarks | GPU Runtime is Time to solution (TTS) |

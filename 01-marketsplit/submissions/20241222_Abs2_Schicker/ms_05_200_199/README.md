@@ -2,19 +2,17 @@
 
 This directory contains the submission for the problem **ms_05_200_199**.
 
-## CSV Summary
-
-| Field | Value |
-|-------|-------|
+| Field | Value 1 |
+| --- | --- |
 | Problem | ms_05_200_199 |
 | Submitter | Maximilian Schicker |
+| Affiliation | Zuse Institute Berlin |
 | Date | 22. Dec. 2024 |
-|======||
+| ====== |  |
 | Reference | See Models Directory using abs2 |
-|======||
 | Best Objective Value | 0 |
 | Optimality Bound | N/A |
-|======||
+| ====== |  |
 | Modeling Approach | QUBO |
 | # Decision Variables | 40 |
 | # Binary Variables | 40 |
@@ -23,20 +21,22 @@ This directory contains the submission for the problem **ms_05_200_199**.
 | # Non-Zero Coefficients | 1560 |
 | Coefficients Type | Integer |
 | Coefficients Range | N/A - N/A |
-|======||
+| ====== |  |
 | Workflow | Generate QS files using ZIMPL, solve using abs2 |
 | Algorithm Type | Deterministic |
+| Paradigm | Classical |
 | # Runs | 1 |
 | # Feasible Runs | 1 |
 | # Successful Runs | 1 |
 | Success Threshold | N/A |
-|======||
+| ====== |  |
 | Hardware Specifications | Four NVIDIA Tesla V100-SXM2-16GB: CUDA 12.2 |
-|======||
+| ====== |  |
 | Total Runtime | 2.46601 |
+| Time to Solution | 2.21092 |
 | CPU Runtime | N/A |
 | GPU Runtime | 2.210924 |
 | QPU Runtime | N/A |
 | Other HW Runtime | N/A |
-|======||
+| ====== |  |
 | Remarks | GPU Runtime is Time to solution (TTS) |
