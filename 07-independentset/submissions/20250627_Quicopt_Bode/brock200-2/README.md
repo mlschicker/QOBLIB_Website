@@ -5,7 +5,8 @@ This directory contains the submission for the problem **brock200-2**.
 | Field | Value 1 |
 | --- | --- |
 | Problem | brock200-2 |
-| Submitter | Tim Bode (Forschungszentrum Jülich) |
+| Submitter | Tim Bode |
+| Affiliation | Forschungszentrum Jülich |
 | Date | Jun 27, 25 |
 | ====== |  |
 | Reference | https://github.com/FZJ-PGI-12/QuicoptBenchmarks/blob/main/notebooks/max_independent_set/brock200_2.ipynb |
@@ -23,6 +24,7 @@ This directory contains the submission for the problem **brock200-2**.
 | ====== |  |
 | Workflow | Run an improved implementation of the Mean-Field Approximate Optimization Algorithm (https://doi.org/10.1103/PRXQuantum.4.030335) and remove violated bonds. |
 | Algorithm Type | Deterministic |
+| Paradigm | Classical |
 | # Runs | 1 |
 | # Feasible Runs | 1 |
 | # Successful Runs | 0 |
@@ -31,6 +33,7 @@ This directory contains the submission for the problem **brock200-2**.
 | Hardware Specifications | Apple M1 Pro (8 cores, 16 GB memory) |
 | ====== |  |
 | Total Runtime | N/A |
+| Time to Solution | N/A |
 | CPU Runtime | 0.9 |
 | GPU Runtime | N/A |
 | QPU Runtime | N/A |

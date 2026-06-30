@@ -2,19 +2,17 @@
 
 This directory contains the submission for the problem **labs033**.
 
-## CSV Summary
-
-| Field | Value |
-|-------|-------|
+| Field | Value 1 |
+| --- | --- |
 | Problem | labs033 |
 | Submitter | Maximilian Schicker |
+| Affiliation | Zuse Institute Berlin |
 | Date | 21. Feb. 2025 |
-|======||
+| ====== |  |
 | Reference | See Models Directory (UQO) using abs2 |
-|======||
 | Best Objective Value | 80 |
 | Optimality Bound | N/A |
-|======||
+| ====== |  |
 | Modeling Approach | QUBO |
 | # Decision Variables | 561 |
 | # Binary Variables | 561 |
@@ -23,20 +21,22 @@ This directory contains the submission for the problem **labs033**.
 | # Non-Zero Coefficients | 43824 |
 | Coefficients Type | Integer |
 | Coefficients Range | N/A - N/A |
-|======||
+| ====== |  |
 | Workflow | Generate QS files using ZIMPL, solve using abs2 |
 | Algorithm Type | Deterministic |
+| Paradigm | Classical |
 | # Runs | 1 |
 | # Feasible Runs | 1 |
 | # Successful Runs | 1 |
 | Success Threshold | N/A |
-|======||
+| ====== |  |
 | Hardware Specifications | Two NVIDIA A100-SXM4-80GB: CUDA 12.2 |
-|======||
+| ====== |  |
 | Total Runtime | 600.026566 |
+| Time to Solution | 574.944 |
 | CPU Runtime | N/A |
 | GPU Runtime | 574.907529 |
 | QPU Runtime | N/A |
 | Other HW Runtime | N/A |
-|======||
+| ====== |  |
 | Remarks | GPU Runtime is Time to solution (TTS) |

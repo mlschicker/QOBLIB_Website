@@ -76,11 +76,11 @@ import gzip
 import os
 
 REQUIRED_COLUMNS: List[str] = [
-    "Problem","Submitter","Date","Reference","Best Objective Value","Optimality Bound","Modeling Approach",
+    "Problem","Submitter","Affiliation","Date","Reference","Best Objective Value","Optimality Bound","Modeling Approach",
     "# Decision Variables","# Binary Variables","# Integer Variables","# Continuous Variables",
-    "# Non-Zero Coefficients","Coefficients Type","Coefficients Range","Workflow","Algorithm Type",
+    "# Non-Zero Coefficients","Coefficients Type","Coefficients Range","Workflow","Algorithm Type","Paradigm",
     "# Runs","# Feasible Runs","# Successful Runs","Success Threshold","Hardware Specifications",
-    "Total Runtime","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime","Remarks"
+    "Total Runtime","Time to Solution","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime","Remarks"
 ]
 
 # Columns we try to parse as ints/floats (best-effort; empty allowed)
@@ -90,7 +90,7 @@ INT_COLUMNS = {
 }
 FLOAT_COLUMNS = {
     "Best Objective Value","Optimality Bound","Success Threshold",
-    "Total Runtime","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime"
+    "Total Runtime","Time to Solution","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime"
 }
 
 OBJECTIVE_TS_BASENAME = "_objective_time_series.json"

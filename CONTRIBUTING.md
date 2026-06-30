@@ -20,11 +20,12 @@ Each benchmark submission should include:
 ### Required Information
 
 1. **Problem instance identifier** - Which instance(s) were solved
-2. **Submitter details** - Name(s) and affiliation(s)
-3. **Submission date**
-4. **Best objective value found** (for optimization problems)
-5. **Solution file** - In the format specified for the problem class (see solution folders)
-6. **Reference** - Link to paper, code repository, or detailed documentation with:
+2. **Submitter details** - Name(s) of the author(s)
+3. **Affiliation** - Affiliation of the author(s) 
+4. **Submission date**
+5. **Best objective value found** (for optimization problems)
+6. **Solution file** - In the format specified for the problem class (see solution folders)
+7. **Reference** - Link to paper, code repository, or detailed documentation with:
    - Hyperparameters
    - Complete hardware specifications
    - Software versions
@@ -53,6 +54,7 @@ Briefly summarize the complete optimization workflow to facilitate reproducibili
 
 #### Algorithm Characteristics
 - **Algorithm type** - Deterministic or stochastic
+- **Paradigm** - Either: Classical, Quantum Simulator, Quantum Hardware
 - **Optimality bound** (if available) - Lower bound (minimization) or upper bound (maximization)
 
 #### For Stochastic Algorithms
@@ -71,6 +73,7 @@ Provide complete specifications for all hardware used in the workflow.
 #### Runtime Reporting
 Report average runtimes across all repetitions (exclude queuing time for hardware access):
 - **Total Runtime** - End-to-end execution time
+- **Time to Solution** - Time to find the best solution
 - **CPU Runtime** - Classical processing time
 - **GPU Runtime** - GPU acceleration time (if applicable)
 - **QPU Runtime** - Quantum processing unit time (if applicable)
@@ -87,7 +90,8 @@ The template includes the following fields:
 | Field                        | Description                                                                                                                                                                                                                               |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Problem**                  | Identifier of the considered problem instance                                                                                                                                                                                             |
-| **Submitter**                | Name(s) of the submitter(s) and affiliation(s)                                                                                                                                                                                            |
+| **Submitter**                | Name(s) of the author(s)                                                                                                                                                                                                                  |
+| **Affiliation**              | Affiliation of the author(s)                                                                                                                                                                                                              |
 | **Date**                     | Date of submission                                                                                                                                                                                                                        |
 |                              |                                                                                                                                                                                                                                           |
 | **Reference**                | Reference to a paper/repository with more details (number CPUs, processor types, software versions, etc.)                                                                                                                                 |
@@ -106,6 +110,7 @@ The template includes the following fields:
 |                              |                                                                                                                                                                                                                                           |
 | **Workflow**                 | Description of the optimization workflow: pre-processing, pre-solvers, optimization algorithms, and post-processing, etc.                                                                                                                 |
 | **Algorithm Type**           | Indicate whether the algorithm is deterministic or stochastic                                                                                                                                                                             |
+| **Paradigm**                 | Either: Classical, Quantum Simulator, Quantum Hardware                                                                                                                                                                                    |
 | **\# Runs**                  | The number of times the experiment has been repeated                                                                                                                                                                                      |
 | **\# Feasible Runs**         | The number of times a run found a feasible solution                                                                                                                                                                                       |
 | **\# Successful Runs**       | Number of runs that found a feasible solution with objective value $\leq (1 + \epsilon) * f_{min}$ (minimization) or $\geq (1 - \epsilon) * f_{max}$ (maximization), where $f_{min}/f_{max}$ is the best solution found by the algorithm. |
@@ -115,6 +120,7 @@ The template includes the following fields:
 | **Hardware Specifications**  | Specifications of hardware used to run the workflow                                                                                                                                                                                       |
 |                              |                                                                                                                                                                                                                                           |
 | **Total Runtime**            | Total runtime to run the complete workflow                                                                                                                                                                                                |
+| **Time to Solution**         | Time to find the best solution                                                                                                                                                                                                            |
 | **CPU Runtime**              | CPU runtime to run the workflow                                                                                                                                                                                                           |
 | **GPU Runtime**              | GPU runtime to run the workflow                                                                                                                                                                                                           |
 | **QPU Runtime**              | QPU runtime to run the workflow                                                                                                                                                                                                           |
@@ -138,7 +144,7 @@ The template includes the following fields:
 - Report negative results (valuable for the community!)
 
 ### Stochastic Algorithms
-- Run multiple independent trials (recommend 10+ runs)
+- Run multiple independent trials (recommend 10+ runs, required 5+ runs)
 - Report statistical measures (mean, median, std dev) when possible
 - Document random seeds for reproducibility
 
