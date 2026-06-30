@@ -42,6 +42,7 @@ Checks for each instance directory:
 
 Usage:
   python validate_submission.py SUBMISSION_ROOT
+    [--all]                              # validate every submission under a repo / problem-class / submissions dir
     [--no-check]                         # disable automatic per-problem solution checker
     [--checker-cmd '...{solution}...']   # command template with placeholders
     [--instance-pattern 'glob*']         # only check matching instance dir names
@@ -82,11 +83,11 @@ import gzip
 import os
 
 REQUIRED_COLUMNS: List[str] = [
-    "Problem","Submitter","Date","Reference","Best Objective Value","Optimality Bound","Modeling Approach",
+    "Problem","Submitter","Affiliation","Date","Reference","Best Objective Value","Optimality Bound","Modeling Approach",
     "# Decision Variables","# Binary Variables","# Integer Variables","# Continuous Variables",
-    "# Non-Zero Coefficients","Coefficients Type","Coefficients Range","Workflow","Algorithm Type",
+    "# Non-Zero Coefficients","Coefficients Type","Coefficients Range","Workflow","Algorithm Type","Paradigm",
     "# Runs","# Feasible Runs","# Successful Runs","Success Threshold","Hardware Specifications",
-    "Total Runtime","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime","Remarks"
+    "Total Runtime","Time to Solution","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime","Remarks"
 ]
 
 # Columns we try to parse as ints/floats (best-effort; empty allowed)
@@ -96,7 +97,7 @@ INT_COLUMNS = {
 }
 FLOAT_COLUMNS = {
     "Best Objective Value","Optimality Bound","Success Threshold",
-    "Total Runtime","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime"
+    "Total Runtime","Time to Solution","CPU Runtime","GPU Runtime","QPU Runtime","Other HW Runtime"
 }
 
 OBJECTIVE_TS_BASENAME = "_objective_time_series.json"
@@ -218,6 +219,19 @@ def validate_csv(instance: str, csv_path: Path, strict_problem_match: bool, repo
                 float(val.replace(",", ""))
             except Exception:
                 report.fail(f"Row {i}: Column '{col}' should be a number or 'N/A', found '{val}'.")
+
+        # Multiple authors must be given as a comma-separated list (wrapped in
+        # double quotes in the raw CSV so it parses as a single field), and the
+        # affiliations must be a comma-separated list in the same order, with
+        # one entry per author (repeat shared affiliations).
+        submitters = [s.strip() for s in (row.get("Submitter") or "").split(",") if s.strip()]
+        affiliations = [a.strip() for a in (row.get("Affiliation") or "").split(",") if a.strip()]
+        if len(submitters) > 1 and len(affiliations) != len(submitters):
+            report.warn(
+                f"Row {i}: {len(submitters)} author(s) in 'Submitter' but {len(affiliations)} "
+                f"entry/entries in 'Affiliation'. Provide a comma-separated affiliation per author "
+                f"in the same order (repeat shared affiliations)."
+            )
 
     return rows
 
@@ -700,9 +714,51 @@ def validate_instance(
     return report
 
 
+def validate_one_submission(root: Path, args: argparse.Namespace) -> List[InstanceReport]:
+    """Validate a single submission root, returning one report per instance dir."""
+    instance_dirs = find_instance_dirs(root, args.instance_pattern)
+    reports: List[InstanceReport] = []
+    for inst_dir in instance_dirs:
+        if args.verbose:
+            print(f"Validating instance: {inst_dir.name}")
+        reports.append(validate_instance(root, inst_dir, args))
+    return reports
+
+
+def discover_submission_roots(root: Path) -> List[Path]:
+    """Find every submission directory reachable from `root`.
+
+    Accepts being pointed at any of:
+      - a repository root        -> scans <root>/*/submissions/*
+      - a problem-class dir      -> scans <root>/submissions/*
+      - a `submissions/` dir     -> scans <root>/*
+
+    Each immediate subdirectory of a `submissions/` folder is treated as one
+    submission root. Directories named "misc" are ignored.
+    """
+    if root.name == "submissions":
+        submissions_dirs = [root]
+    elif (root / "submissions").is_dir():
+        submissions_dirs = [root / "submissions"]
+    else:
+        submissions_dirs = sorted(root.glob("*/submissions"))
+
+    roots: List[Path] = []
+    for submissions_dir in submissions_dirs:
+        if not submissions_dir.is_dir():
+            continue
+        for d in sorted(submissions_dir.iterdir(), key=lambda p: p.name.lower()):
+            if d.is_dir() and d.name.lower() != "misc":
+                roots.append(d)
+    return roots
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate benchmarking-library submission.")
     parser.add_argument("submission_root", type=Path, help="Path to submission root directory.")
+    parser.add_argument("--all", action="store_true",
+                        help="Treat the path as a repository root and validate every submission found "
+                             "under <root>/*/submissions/*. Aggregates results across all submissions.")
     parser.add_argument("--no-check", action="store_true",
                         help="Disable the automatic per-problem solution checker.")
     parser.add_argument("--checker-cmd", type=str, default=None,
@@ -722,19 +778,54 @@ def main() -> None:
 
     root = args.submission_root
     if not root.exists() or not root.is_dir():
-        print(f"ERROR: Submission root does not exist or is not a directory: {root}", file=sys.stderr)
+        print(f"ERROR: Path does not exist or is not a directory: {root}", file=sys.stderr)
         sys.exit(2)
 
-    instance_dirs = find_instance_dirs(root, args.instance_pattern)
-    if not instance_dirs:
+    if args.all:
+        submission_roots = discover_submission_roots(root)
+        if not submission_roots:
+            print(f"No submissions found under {root}/*/submissions/*.", file=sys.stderr)
+            sys.exit(2)
+
+        grand_pass = grand_total = 0
+        empty_submissions: List[Path] = []
+        failed_submissions: List[Path] = []
+        for sroot in submission_roots:
+            rel = sroot.relative_to(root)
+            banner = f"# SUBMISSION: {rel}"
+            print("\n" + "#" * len(banner))
+            print(banner)
+            print("#" * len(banner))
+            reports = validate_one_submission(sroot, args)
+            if not reports:
+                print("WARNING: no instance subdirectories found in this submission.\n")
+                empty_submissions.append(rel)
+                continue
+            print_report(reports, quiet=args.quiet)
+            grand_total += len(reports)
+            grand_pass += sum(1 for r in reports if r.ok)
+            if not all(r.ok for r in reports):
+                failed_submissions.append(rel)
+
+        print("\n" + "=" * 70)
+        print(f"GRAND TOTAL: {grand_pass}/{grand_total} instances passed "
+              f"across {len(submission_roots)} submissions.")
+        if empty_submissions:
+            print(f"Submissions with no recognized instance dirs ({len(empty_submissions)}):")
+            for rel in empty_submissions:
+                print(f"  - {rel}")
+        if failed_submissions:
+            print(f"Submissions with failing instances ({len(failed_submissions)}):")
+            for rel in failed_submissions:
+                print(f"  - {rel}")
+        ok = not failed_submissions and not empty_submissions
+        print("Overall: OK" if ok else "Overall: FAILED")
+        sys.exit(0 if ok else 1)
+
+    reports = validate_one_submission(root, args)
+    if not reports:
         print("No instance subdirectories found matching criteria.", file=sys.stderr)
         sys.exit(2)
-
-    reports: List[InstanceReport] = []
-    for inst_dir in instance_dirs:
-        if args.verbose:
-            print(f"Validating instance: {inst_dir.name}")
-        reports.append(validate_instance(root, inst_dir, args))
 
     print_report(reports, quiet=args.quiet)
 

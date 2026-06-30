@@ -24,6 +24,19 @@ Validates that a submission matches QOBLIB contribution guidelines.
 python check_submission.py <path_to_submission>
 ```
 
+**Validate every submission at once:**
+```bash
+# Point --all at the repo root, a problem-class dir, or a submissions/ dir.
+python check_submission.py --all ..
+python check_submission.py --all ../03-birkhoff
+```
+This discovers every submission under `<root>/*/submissions/*` (or the narrower
+scope you point it at), validates each one, and prints a grand-total summary
+listing which submissions failed and which contain no recognized instance dirs.
+The process exits non-zero if any submission fails. Combine with `--quiet` to
+show only failing instances and `--no-check` to skip the per-problem solution
+checker for a fast structural pass.
+
 **Full functionality:**
 ```bash
 python check_submission.py -h
@@ -34,6 +47,7 @@ python check_submission.py -h
 - Checks solution correctness (with custom checker command)
 - Verifies problem names in CSV files
 - Auto-generates optional README files for problem directories
+- `--all`: batch-validate every submission in the library with an aggregate report
 
 **Example (Independent Set):**
 ```bash

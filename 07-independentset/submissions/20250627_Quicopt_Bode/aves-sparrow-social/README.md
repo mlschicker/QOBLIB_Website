@@ -5,7 +5,8 @@ This directory contains the submission for the problem **aves-sparrow-social**.
 | Field | Value 1 |
 | --- | --- |
 | Problem | aves-sparrow-social |
-| Submitter | Tim Bode (Forschungszentrum Jülich) |
+| Submitter | Tim Bode |
+| Affiliation | Forschungszentrum Jülich |
 | Date | Jun 2, 25 |
 | ====== |  |
 | Reference | https://github.com/FZJ-PGI-12/QuicoptBenchmarks/blob/main/notebooks/max_independent_set/aves-sparrow-social.ipynb |
@@ -23,6 +24,7 @@ This directory contains the submission for the problem **aves-sparrow-social**.
 | ====== |  |
 | Workflow | Run an improved implementation of the Mean-Field Approximate Optimization Algorithm (https://doi.org/10.1103/PRXQuantum.4.030335). |
 | Algorithm Type | Deterministic |
+| Paradigm | Classical |
 | # Runs | 1 |
 | # Feasible Runs | 1 |
 | # Successful Runs | 1 |
@@ -31,6 +33,7 @@ This directory contains the submission for the problem **aves-sparrow-social**.
 | Hardware Specifications | Apple M1 Pro (8 cores, 16 GB memory) |
 | ====== |  |
 | Total Runtime | N/A |
+| Time to Solution | N/A |
 | CPU Runtime | 0.06 |
 | GPU Runtime | N/A |
 | QPU Runtime | N/A |

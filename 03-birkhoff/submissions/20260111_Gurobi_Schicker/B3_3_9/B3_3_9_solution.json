@@ -1,0 +1,32 @@
+{
+    "009": {
+        "id": "B3_3_9",
+        "scaled_doubly_stochastic_matrix": [
+            54,
+            0,
+            946,
+            0,
+            1000,
+            0,
+            946,
+            0,
+            54
+        ],
+        "weights": [
+            54,
+            946
+        ],
+        "permutations": [
+            1,
+            2,
+            3,
+            3,
+            2,
+            1
+        ],
+        "optimal": true,
+        "n": 3,
+        "k": 2,
+        "scale": 1000
+    }
+}

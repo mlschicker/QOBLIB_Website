@@ -1,0 +1,39 @@
+# Submission for es60fst01
+
+This directory contains the submission for the problem **es60fst01**.
+
+| Field | Value 1 |
+| --- | --- |
+| Problem | es60fst01 |
+| Submitter | Kara Maller (Q-CTRL) |
+| Date | 2026-06-24 |
+| ====== |  |
+| Reference | https://docs.q-ctrl.com/fire-opal/execute/run-algorithms/solve-optimization-problems/fire-opal-qaoa-solver |
+| Best Objective Value | 60 |
+| Optimality Bound | N/A |
+| ====== |  |
+| Modeling Approach | QUBO |
+| # Decision Variables | 123 |
+| # Binary Variables | 123 |
+| # Integer Variables | 0 |
+| # Continuous Variables | 0 |
+| # Non-Zero Coefficients | 282 |
+| Coefficients Type | integer |
+| Coefficients Range | -1 / 2 |
+| ====== |  |
+| Workflow | QUBO mapping -> Q-CTRL Fire Opal SDK (solve_qaoa) |
+| Algorithm Type | stochastic |
+| # Runs | 1 |
+| # Feasible Runs | 1 |
+| # Successful Runs | 1 |
+| Success Threshold | 0 |
+| ====== |  |
+| Hardware Specifications | IBM QPU (ibm_boston) |
+| ====== |  |
+| Total Runtime | 8.75 |
+| CPU Runtime | 4.75 |
+| GPU Runtime | 0.0 |
+| QPU Runtime | 4.0 |
+| Other HW Runtime | 0.0 |
+| ====== |  |
+| Remarks | Runtime in minutes. Optimal solution found in 16 iterations with 8192 shots. Solver also available via Qiskit https://quantum.cloud.ibm.com/docs/en/guides/q-ctrl-optimization-solver |
